@@ -1,7 +1,7 @@
 import * as acorn from "acorn";
-import { ContextLifecycleWorkflow } from "../workflows/context-lifecycle-workflow.js";
-import { VariableResolutionWorkflow } from "../workflows/variable-resolution-workflow.js";
-import { ControlFlowWorkflow } from "../workflows/control-flow-workflow.js";
+import { ContextLifecycleWorkflow } from "../runtime-time/context-lifecycle-workflow.js";
+import { VariableResolutionWorkflow } from "../runtime-time/variable-resolution-workflow.js";
+import { ControlFlowWorkflow } from "../runtime-time/control-flow-workflow.js";
 import { TerminalRenderer as T } from "../ui/terminal-renderer.js";
 
 export class RuntimeEngine {

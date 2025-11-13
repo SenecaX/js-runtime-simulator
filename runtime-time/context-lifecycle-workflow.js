@@ -1,4 +1,4 @@
-import { CallStack } from "../components/call-stack.js";
+import { CallStack } from "../runtime-space/call-stack.js";
 
 export class ContextLifecycleWorkflow {
   constructor() {

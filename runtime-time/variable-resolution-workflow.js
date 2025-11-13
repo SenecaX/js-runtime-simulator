@@ -1,7 +1,7 @@
-import { LexicalEnvironment } from "../mechanisms/lexical-environment.js";
-import { VariableEnvironment } from "../mechanisms/variable-environment.js";
-import { ScopeChain } from "../mechanisms/scope-chain.js";
-import { EnvironmentRouter } from "../components/environment-router.js";
+import { LexicalEnvironment } from "../runtime-space/lexical-environment.js";
+import { VariableEnvironment } from "../runtime-space/variable-environment.js";
+import { ScopeChain } from "../runtime-space/scope-chain.js";
+import { EnvironmentRouter } from "../runtime-time/environment-router.js";
 
 export class VariableResolutionWorkflow {
   constructor() {

@@ -1,4 +1,4 @@
-import { RuntimeEngine } from "../runtime/runtime-engine.js";
+import { RuntimeEngine } from "../engine/runtime-engine.js";
 
 const runtime = new RuntimeEngine();
 
