@@ -16,6 +16,10 @@ export class ExpressionEvaluator {
       case "BinaryExpression":
         return this.evalBinary(expr);
 
+        case "AssignmentExpression":
+  return this.evalAssignment(expr);
+
+
       default:
         return undefined;
     }
@@ -59,4 +63,24 @@ export class ExpressionEvaluator {
         return undefined;
     }
   }
+
+  evalAssignment(expr) {
+  const { operator, left, right } = expr;
+
+  if (left.type !== "Identifier") {
+    throw new Error("UC06 supports assignment to simple identifiers only");
+  }
+
+  const name = left.name;
+  const value = this.evaluate(right);
+
+  if (operator === "=") {
+    const envs = this.runtime.getCurrentEnvs();
+    this.runtime.variables.update(name, value, envs);
+    return value;
+  }
+
+  throw new Error(`Operator ${operator} not implemented in UC06`);
+}
+
 }

@@ -1,122 +1,5 @@
 
 
-===== ./demo/run-uc01-integration.js =====
-
-import { RuntimeEngine } from "../engine/runtime-engine.js";
-
-const runtime = new RuntimeEngine();
-
-runtime.init();
-runtime.run("var x = 2; let y = 3; const z = 6;");
-console.log("x =", runtime.resolve("x"));
-console.log("x =", runtime.resolve("y"));
-
-runtime.terminate();
-
-
-
-===== ./ui/terminal-renderer.js =====
-
-export class TerminalRenderer {
-  static header(label) {
-    return `\n${label}\n${"-".repeat(40)}`;
-  }
-
-  static block(label, content) {
-    return `${label}:\n${content}`;
-  }
-
-  static formatEnv(env) {
-    const entries = Object.entries(env.environmentRecord);
-    if (entries.length === 0) return "{}";
-    return "{ " + entries.map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(", ") + " }";
-  }
-
-  static formatCallStack(frames) {
-    return frames
-      .map((ctx, i) => `  [${i}] ${ctx.summary()}`)
-      .join("\n");
-  }
-}
-
-
-===== ./runtime-time/environment-router.js =====
-
-export class EnvironmentRouter {
-  constructor(globalLexical, globalVariable) {
-    this.globalLexical = globalLexical;
-    this.globalVariable = globalVariable;
-  }
-
-  // Decide which environment receives the binding
-  select(kind, envs) {
-    const isVar  = kind === "var";
-    const isLet  = kind === "let";
-    const isConst = kind === "const";
-
-    const lexicalEnv = envs.lexical;
-    const variableEnv = envs.variable;
-
-    // var → variable environment
-    if (isVar) return variableEnv;
-
-    // let/const → lexical environment
-    if (isLet || isConst) return lexicalEnv;
-
-    // default fallback (not used in UC01)
-    return lexicalEnv;
-  }
-}
-
-
-===== ./runtime-time/expression-evaluator.js =====
-
-export class ExpressionEvaluator {
-  constructor(runtime) {
-    this.runtime = runtime;
-  }
-
-  evaluate(expr) {
-    if (expr.type === "Literal") return expr.value;
-    if (expr.type === "Identifier") return this.runtime.resolve(expr.name);
-    return undefined;
-  }
-}
-
-
-===== ./runtime-time/context-lifecycle-workflow.js =====
-
-import { CallStack } from "../runtime-space/call-stack.js";
-
-export class ContextLifecycleWorkflow {
-  constructor() {
-    this.callStack = new CallStack();
-  }
-
-  // Create Global Execution Context
-  initializeGlobalContext() {
-    this.callStack.pushContext("Global");
-  }
-
-  // No function context handling for UC01, but keep API for future
-  enterFunction(name) {
-    this.callStack.pushContext(name);
-  }
-
-  exitFunction() {
-    this.callStack.popContext();
-  }
-
-  terminate() {
-    this.callStack.popContext(); // remove Global frame
-  }
-
-  currentContext() {
-    return this.callStack.peekContext();
-  }
-}
-
-
 ===== ./runtime-time/control-flow-workflow.js =====
 
 import { ExpressionEvaluator } from "../runtime-time/expression-evaluator.js";
@@ -137,6 +20,18 @@ export class ControlFlowWorkflow {
     if (node.type === "VariableDeclaration") {
       return this.handleVarDecl(node);
     }
+
+    if (node.type === "BlockStatement") {
+      return this.handleBlock(node);
+    }
+
+if (node.type === "ExpressionStatement") {
+  const value = this.evaluator.evaluate(node.expression);
+  this.runtime.lastValue = value;     // <-- NEW LINE
+  return value;
+}
+
+
   }
 
   handleVarDecl(node) {
@@ -147,6 +42,80 @@ export class ControlFlowWorkflow {
       const value = decl.init ? this.evaluator.evaluate(decl.init) : undefined;
 
       this.runtime.define(name, value, node.kind, envs);
+    }
+  }
+
+  handleBlock(node) {
+    this.runtime.pushBlockEnv();
+    for (const stmt of node.body) {
+      this.dispatch(stmt);
+    }
+    this.runtime.popBlockEnv();
+  }
+}
+
+
+===== ./runtime-time/expression-evaluator.js =====
+
+export class ExpressionEvaluator {
+  constructor(runtime) {
+    this.runtime = runtime;
+  }
+
+  evaluate(expr) {
+    if (!expr) return undefined;
+
+    switch (expr.type) {
+      case "Literal":
+        return expr.value;
+
+      case "Identifier":
+        return this.runtime.resolve(expr.name);
+
+      case "BinaryExpression":
+        return this.evalBinary(expr);
+
+      default:
+        return undefined;
+    }
+  }
+
+  evalBinary(expr) {
+    const left = this.evaluate(expr.left);
+    const right = this.evaluate(expr.right);
+
+    switch (expr.operator) {
+      case "+":
+        return left + right;
+      case "-":
+        return left - right;
+      case "*":
+        return left * right;
+      case "/":
+        return left / right;
+      case "%":
+        return left % right;
+
+      case "==":
+        return left == right;
+      case "===":
+        return left === right;
+      case "!=":
+        return left != right;
+      case "!==":
+        return left !== right;
+
+      case "<":
+        return left < right;
+      case "<=":
+        return left <= right;
+      case ">":
+        return left > right;
+      case ">=":
+        return left >= right;
+
+      default:
+        return undefined;
     }
   }
 }
@@ -193,51 +162,6 @@ export class VariableResolutionWorkflow {
 }
 
 
-===== ./core/stack.js =====
-
-export class Stack {
-  constructor() {
-    this.items = [];
-  }
-
-  push(item) {
-    this.items.push(item);
-  }
-
-  pop() {
-    return this.items.pop();
-  }
-
-  peek() {
-    return this.items[this.items.length - 1];
-  }
-
-  get length() {
-    return this.items.length;
-  }
-}
-
-
-===== ./runtime-space/variable-environment.js =====
-
-export class VariableEnvironment {
-  constructor(outer = null) {
-    this.environmentRecord = {};
-    this.outer = outer;
-  }
-
-  define(name, value) {
-    this.environmentRecord[name] = value;
-  }
-
-  lookup(name) {
-    if (name in this.environmentRecord) return this.environmentRecord[name];
-    if (this.outer) return this.outer.lookup(name);
-    return undefined;
-  }
-}
-
-
 ===== ./runtime-space/lexical-environment.js =====
 
 export class LexicalEnvironment {
@@ -258,174 +182,21 @@ export class LexicalEnvironment {
 }
 
 
-===== ./runtime-space/scope-chain.js =====
+===== ./runtime-space/variable-environment.js =====
 
-export class ScopeChain {
-  static lookup(name, startEnv) {
-    let env = startEnv;
-
-    while (env) {
-      if (name in env.environmentRecord) {
-        return env.environmentRecord[name];
-      }
-
-      env = env.outer;
-    }
-
-    throw new ReferenceError(`${name} is not defined`);
+export class VariableEnvironment {
+  constructor(outer = null) {
+    this.environmentRecord = {};
+    this.outer = outer;
   }
 
-  static print(startEnv) {
-    let env = startEnv;
-    const chain = [];
-    while (env) {
-      chain.push(Object.keys(env.environmentRecord));
-      env = env.outer;
-    }
-    console.log(chain);
-  }
-}
-
-
-===== ./runtime-space/execution-context.js =====
-
-import { LexicalEnvironment } from "../runtime-space/lexical-environment.js";
-import { VariableEnvironment } from "../runtime-space/variable-environment.js";
-
-export class ExecutionContext {
-  constructor(name, outerLexical = null, outerVariable = null, depth = 0) {
-    this.name = name;
-    this.lexicalEnv = new LexicalEnvironment(outerLexical);
-    this.variableEnv = new VariableEnvironment(outerVariable);
-    this.depth = depth;
+  define(name, value) {
+    this.environmentRecord[name] = value;
   }
 
-  summary() {
-    return `${this.name} (Depth: ${this.depth})`;
-  }
-}
-
-
-===== ./runtime-space/call-stack.js =====
-
-import { Stack } from "../core/stack.js";
-import { ExecutionContext } from "./execution-context.js";
-
-export class CallStack {
-  constructor() {
-    this.stack = new Stack();
-  }
-
-  pushContext(name) {
-    const prev = this.stack.peek();
-    const outerLex = prev ? prev.lexicalEnv : null;
-    const outerVar = prev ? prev.variableEnv : null;
-    const depth = this.stack.length;
-
-    const ctx = new ExecutionContext(name, outerLex, outerVar, depth);
-    this.stack.push(ctx);
-  }
-
-  popContext() {
-    return this.stack.pop();
-  }
-
-  peekContext() {
-    return this.stack.peek();
-  }
-
-  printStack() {
-    return this.stack.items;
-  }
-}
-
-
-===== ./engine/runtime-engine.js =====
-
-import * as acorn from "acorn";
-import { ContextLifecycleWorkflow } from "../runtime-time/context-lifecycle-workflow.js";
-import { VariableResolutionWorkflow } from "../runtime-time/variable-resolution-workflow.js";
-import { ControlFlowWorkflow } from "../runtime-time/control-flow-workflow.js";
-import { TerminalRenderer as T } from "../ui/terminal-renderer.js";
-
-export class RuntimeEngine {
-  constructor() {
-    this.contexts = new ContextLifecycleWorkflow();
-    this.variables = new VariableResolutionWorkflow();
-    this.controlFlow = new ControlFlowWorkflow(this);
-  }
-
-  // ───────────────────────────────
-  // Lifecycle
-  // ───────────────────────────────
-  init() {
-    this.contexts.initializeGlobalContext();
-  }
-
-  terminate() {
-    this.contexts.terminate();
-  }
-
-  // ───────────────────────────────
-  // Environment Access
-  // ───────────────────────────────
-  getCurrentEnvs() {
-    const ctx = this.contexts.currentContext();
-    return {
-      lexical: ctx.lexicalEnv,
-      variable: ctx.variableEnv,
-    };
-  }
-
-  define(name, value, kind, envs) {
-    this.variables.define(name, value, kind, envs);
-    this.renderSnapshot(`define ${name} = ${JSON.stringify(value)} (${kind})`);
-  }
-
-  resolve(name) {
-    const envs = this.getCurrentEnvs();
-    return this.variables.resolve(name, envs);
-  }
-
-  // ───────────────────────────────
-  // Execution
-  // ───────────────────────────────
-  run(code) {
-    const ast = acorn.parse(code, { ecmaVersion: "latest" });
-    this.controlFlow.execute(ast.body);
-  }
-
-  // ───────────────────────────────
-  // Snapshot
-  // ───────────────────────────────
-  renderSnapshot(action) {
-    const ctx = this.contexts.currentContext();
-    const envs = this.getCurrentEnvs();
-    const frames = this.contexts.callStack.printStack();
-
-    console.log(T.header(`ACTION: ${action}`));
-
-    console.log(
-      T.block(
-        "CALL STACK",
-        T.formatCallStack(frames)
-      )
-    );
-
-    console.log(
-      T.block(
-        "LexicalEnv",
-        T.formatEnv(envs.lexical)
-      )
-    );
-
-    console.log(
-      T.block(
-        "VariableEnv",
-        T.formatEnv(envs.variable)
-      )
-    );
-
-    console.log("-".repeat(40));
+  lookup(name) {
+    if (name in this.environmentRecord) return this.environmentRecord[name];
+    if (this.outer) return this.outer.lookup(name);
+    return undefined;
   }
 }

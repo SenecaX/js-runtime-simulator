@@ -23,7 +23,7 @@ export class ControlFlowWorkflow {
 
 if (node.type === "ExpressionStatement") {
   const value = this.evaluator.evaluate(node.expression);
-  this.runtime.lastValue = value;     // <-- NEW LINE
+  this.runtime.lastValue = value;   
   return value;
 }
 

@@ -34,4 +34,30 @@ export class VariableResolutionWorkflow {
       }
     }
   }
+
+  update(name, value, envs) {
+  // 1. lexical chain first
+  let env = envs.lexical;
+  while (env) {
+    if (name in env.environmentRecord) {
+      env.set(name, value);
+      return value;
+    }
+    env = env.outer;
+  }
+
+  // 2. fallback to variable chain
+  env = envs.variable;
+  while (env) {
+    if (name in env.environmentRecord) {
+      env.set(name, value);
+      return value;
+    }
+    env = env.outer;
+  }
+
+  // 3. not found
+  throw new ReferenceError(`${name} is not defined`);
+}
+
 }
