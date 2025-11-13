@@ -20,6 +20,14 @@ export class ControlFlowWorkflow {
     if (node.type === "BlockStatement") {
       return this.handleBlock(node);
     }
+
+if (node.type === "ExpressionStatement") {
+  const value = this.evaluator.evaluate(node.expression);
+  this.runtime.lastValue = value;     // <-- NEW LINE
+  return value;
+}
+
+
   }
 
   handleVarDecl(node) {

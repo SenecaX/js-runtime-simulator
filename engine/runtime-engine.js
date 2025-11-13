@@ -5,6 +5,8 @@ import { ControlFlowWorkflow } from "../runtime-time/control-flow-workflow.js";
 import { TerminalRenderer as T } from "../ui/terminal-renderer.js";
 
 export class RuntimeEngine {
+    lastValue = undefined;
+    
   constructor() {
     this.contexts = new ContextLifecycleWorkflow();
     this.variables = new VariableResolutionWorkflow();
