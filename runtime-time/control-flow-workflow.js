@@ -16,6 +16,10 @@ export class ControlFlowWorkflow {
     if (node.type === "VariableDeclaration") {
       return this.handleVarDecl(node);
     }
+
+    if (node.type === "BlockStatement") {
+      return this.handleBlock(node);
+    }
   }
 
   handleVarDecl(node) {
@@ -27,5 +31,13 @@ export class ControlFlowWorkflow {
 
       this.runtime.define(name, value, node.kind, envs);
     }
+  }
+
+  handleBlock(node) {
+    this.runtime.pushBlockEnv();
+    for (const stmt of node.body) {
+      this.dispatch(stmt);
+    }
+    this.runtime.popBlockEnv();
   }
 }

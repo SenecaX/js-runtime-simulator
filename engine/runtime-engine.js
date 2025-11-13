@@ -43,6 +43,16 @@ export class RuntimeEngine {
     return this.variables.resolve(name, envs);
   }
 
+  pushBlockEnv() {
+    const ctx = this.contexts.currentContext();
+    ctx.lexicalEnv = new ctx.lexicalEnv.constructor(ctx.lexicalEnv);
+  }
+
+  popBlockEnv() {
+    const ctx = this.contexts.currentContext();
+    ctx.lexicalEnv = ctx.lexicalEnv.outer;
+  }
+
   // ───────────────────────────────
   // Execution
   // ───────────────────────────────
@@ -61,26 +71,11 @@ export class RuntimeEngine {
 
     console.log(T.header(`ACTION: ${action}`));
 
-    console.log(
-      T.block(
-        "CALL STACK",
-        T.formatCallStack(frames)
-      )
-    );
+    console.log(T.block("CALL STACK", T.formatCallStack(frames)));
 
-    console.log(
-      T.block(
-        "LexicalEnv",
-        T.formatEnv(envs.lexical)
-      )
-    );
+    console.log(T.block("LexicalEnv", T.formatEnv(envs.lexical)));
 
-    console.log(
-      T.block(
-        "VariableEnv",
-        T.formatEnv(envs.variable)
-      )
-    );
+    console.log(T.block("VariableEnv", T.formatEnv(envs.variable)));
 
     console.log("-".repeat(40));
   }
