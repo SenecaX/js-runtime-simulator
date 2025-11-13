@@ -1,113 +1,145 @@
 
 
-===== ./ui/terminal-renderer.js =====
+===== ./runtime-time/control-flow-workflow.js =====
 
-export class TerminalRenderer {
-  static header(label) {
-    return `\n${label}\n${"-".repeat(40)}`;
+import { ExpressionEvaluator } from "../runtime-time/expression-evaluator.js";
+
+export class ControlFlowWorkflow {
+  constructor(runtime) {
+    this.runtime = runtime;
+    this.evaluator = new ExpressionEvaluator(runtime);
   }
 
-  static block(label, content) {
-    return `${label}:\n${content}`;
+  execute(body) {
+    for (const node of body) {
+      this.dispatch(node);
+    }
   }
 
-  static formatEnv(env) {
-    const entries = Object.entries(env.environmentRecord);
-    if (entries.length === 0) return "{}";
-    return "{ " + entries.map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(", ") + " }";
+  dispatch(node) {
+    if (node.type === "VariableDeclaration") {
+      return this.handleVarDecl(node);
+    }
+
+    if (node.type === "BlockStatement") {
+      return this.handleBlock(node);
+    }
+
+if (node.type === "ExpressionStatement") {
+  const value = this.evaluator.evaluate(node.expression);
+  this.runtime.lastValue = value;   
+  return value;
+}
+
+
   }
 
-  static formatCallStack(frames) {
-    return frames
-      .map((ctx, i) => `  [${i}] ${ctx.summary()}`)
-      .join("\n");
+  handleVarDecl(node) {
+    const envs = this.runtime.getCurrentEnvs();
+
+    for (const decl of node.declarations) {
+      const name = decl.id.name;
+      const value = decl.init ? this.evaluator.evaluate(decl.init) : undefined;
+
+      this.runtime.define(name, value, node.kind, envs);
+    }
+  }
+
+  handleBlock(node) {
+    this.runtime.pushBlockEnv();
+    for (const stmt of node.body) {
+      this.dispatch(stmt);
+    }
+    this.runtime.popBlockEnv();
   }
 }
 
 
-===== ./engine/runtime-engine.js =====
+===== ./runtime-time/expression-evaluator.js =====
 
-import * as acorn from "acorn";
-import { ContextLifecycleWorkflow } from "../runtime-time/context-lifecycle-workflow.js";
-import { VariableResolutionWorkflow } from "../runtime-time/variable-resolution-workflow.js";
-import { ControlFlowWorkflow } from "../runtime-time/control-flow-workflow.js";
-import { TerminalRenderer as T } from "../ui/terminal-renderer.js";
-
-export class RuntimeEngine {
-    lastValue = undefined;
-    
-  constructor() {
-    this.contexts = new ContextLifecycleWorkflow();
-    this.variables = new VariableResolutionWorkflow();
-    this.controlFlow = new ControlFlowWorkflow(this);
+export class ExpressionEvaluator {
+  constructor(runtime) {
+    this.runtime = runtime;
   }
 
-  // ───────────────────────────────
-  // Lifecycle
-  // ───────────────────────────────
-  init() {
-    this.contexts.initializeGlobalContext();
+  evaluate(expr) {
+    if (!expr) return undefined;
+
+    switch (expr.type) {
+      case "Literal":
+        return expr.value;
+
+      case "Identifier":
+        return this.runtime.resolve(expr.name);
+
+      case "BinaryExpression":
+        return this.evalBinary(expr);
+
+        case "AssignmentExpression":
+  return this.evalAssignment(expr);
+
+
+      default:
+        return undefined;
+    }
   }
 
-  terminate() {
-    this.contexts.terminate();
+  evalBinary(expr) {
+    const left = this.evaluate(expr.left);
+    const right = this.evaluate(expr.right);
+
+    switch (expr.operator) {
+      case "+":
+        return left + right;
+      case "-":
+        return left - right;
+      case "*":
+        return left * right;
+      case "/":
+        return left / right;
+      case "%":
+        return left % right;
+
+      case "==":
+        return left == right;
+      case "===":
+        return left === right;
+      case "!=":
+        return left != right;
+      case "!==":
+        return left !== right;
+
+      case "<":
+        return left < right;
+      case "<=":
+        return left <= right;
+      case ">":
+        return left > right;
+      case ">=":
+        return left >= right;
+
+      default:
+        return undefined;
+    }
   }
 
-  // ───────────────────────────────
-  // Environment Access
-  // ───────────────────────────────
-  getCurrentEnvs() {
-    const ctx = this.contexts.currentContext();
-    return {
-      lexical: ctx.lexicalEnv,
-      variable: ctx.variableEnv,
-    };
+  evalAssignment(expr) {
+  const { operator, left, right } = expr;
+
+  if (left.type !== "Identifier") {
+    throw new Error("UC06 supports assignment to simple identifiers only");
   }
 
-  define(name, value, kind, envs) {
-    this.variables.define(name, value, kind, envs);
-    this.renderSnapshot(`define ${name} = ${JSON.stringify(value)} (${kind})`);
+  const name = left.name;
+  const value = this.evaluate(right);
+
+  if (operator === "=") {
+    const envs = this.runtime.getCurrentEnvs();
+    this.runtime.variables.update(name, value, envs);
+    return value;
   }
 
-  resolve(name) {
-    const envs = this.getCurrentEnvs();
-    return this.variables.resolve(name, envs);
-  }
+  throw new Error(`Operator ${operator} not implemented in UC06`);
+}
 
-  pushBlockEnv() {
-    const ctx = this.contexts.currentContext();
-    ctx.lexicalEnv = new ctx.lexicalEnv.constructor(ctx.lexicalEnv);
-  }
-
-  popBlockEnv() {
-    const ctx = this.contexts.currentContext();
-    ctx.lexicalEnv = ctx.lexicalEnv.outer;
-  }
-
-  // ───────────────────────────────
-  // Execution
-  // ───────────────────────────────
-  run(code) {
-    const ast = acorn.parse(code, { ecmaVersion: "latest" });
-    this.controlFlow.execute(ast.body);
-  }
-
-  // ───────────────────────────────
-  // Snapshot
-  // ───────────────────────────────
-  renderSnapshot(action) {
-    const ctx = this.contexts.currentContext();
-    const envs = this.getCurrentEnvs();
-    const frames = this.contexts.callStack.printStack();
-
-    console.log(T.header(`ACTION: ${action}`));
-
-    console.log(T.block("CALL STACK", T.formatCallStack(frames)));
-
-    console.log(T.block("LexicalEnv", T.formatEnv(envs.lexical)));
-
-    console.log(T.block("VariableEnv", T.formatEnv(envs.variable)));
-
-    console.log("-".repeat(40));
-  }
 }
