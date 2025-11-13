@@ -7,11 +7,15 @@ export class ControlFlowWorkflow {
   }
 
   execute(body) {
-    for (const node of body) this.dispatch(node);
+    for (const node of body) {
+      this.dispatch(node);
+    }
   }
 
   dispatch(node) {
-    if (node.type === "VariableDeclaration") return this.handleVarDecl(node);
+    if (node.type === "VariableDeclaration") {
+      return this.handleVarDecl(node);
+    }
   }
 
   handleVarDecl(node) {
@@ -20,6 +24,7 @@ export class ControlFlowWorkflow {
     for (const decl of node.declarations) {
       const name = decl.id.name;
       const value = decl.init ? this.evaluator.evaluate(decl.init) : undefined;
+
       this.runtime.define(name, value, node.kind, envs);
     }
   }
