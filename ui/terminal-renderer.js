@@ -18,4 +18,23 @@ export class TerminalRenderer {
       .map((ctx, i) => `  [${i}] ${ctx.summary()}`)
       .join("\n");
   }
+
+  static formatEnvChain(env) {
+  let output = [];
+  let cur = env;
+  let level = 0;
+
+  while (cur) {
+    const entries = Object.entries(cur.environmentRecord)
+      .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+      .join(", ");
+
+    output.push(`  [${level}] { ${entries} }`);
+    cur = cur.outer;
+    level++;
+  }
+
+  return output.join("\n");
+}
+
 }
