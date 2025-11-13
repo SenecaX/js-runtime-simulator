@@ -5,6 +5,7 @@ OUTPUT="./observation_fix_bundle.txt"
 FILES=(
   ./runtime-time/control-flow-workflow.js
   ./runtime-time/expression-evaluator.js
+  ./engine/runtime-engine.js
 )
 
 
