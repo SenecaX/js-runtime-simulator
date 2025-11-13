@@ -57,6 +57,18 @@ export class RuntimeEngine {
 
 callFunction(fn, args) {
 
+if (!fn || fn.type !== "FunctionObject") {
+  throw new TypeError("CallExpression: callee is not a function");
+}
+
+
+  if (fn.params.length !== args.length) {
+throw new TypeError(
+  `CallExpression: expected ${fn.params.length} arguments but got ${args.length}`
+);
+
+  }
+
   // 1. Push context frame
   const ctx = this.contexts.callStack.pushContext(fn.name);
 

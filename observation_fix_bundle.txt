@@ -1,5 +1,122 @@
 
 
+===== ./runtime-time/expression-evaluator.js =====
+
+export class ExpressionEvaluator {
+  constructor(runtime) {
+    this.runtime = runtime;
+  }
+
+  evaluate(expr) {
+    if (!expr) return undefined;
+
+    switch (expr.type) {
+      case "Literal":
+        return expr.value;
+
+      case "Identifier":
+        return this.runtime.resolve(expr.name);
+
+      case "BinaryExpression":
+        return this.evalBinary(expr);
+
+      case "AssignmentExpression":
+        return this.evalAssignment(expr);
+
+      case "CallExpression":
+        return this.evalCall(expr);
+
+      default:
+        return undefined;
+    }
+  }
+
+evalCall(expr) {
+  // 1. Evaluate callee (must be a FunctionObject)
+  const callee = this.evaluate(expr.callee);
+
+  if (!callee || callee.type !== "FunctionObject") {
+    throw new Error("CallExpression: callee is not a function");
+  }
+
+  // 2. Validate argument count BEFORE evaluating arguments
+  const expected = callee.params.length;
+  const received = expr.arguments.length;
+
+  if (expected !== received) {
+    throw new Error(
+      `CallExpression: expected ${expected} arguments but got ${received}`
+    );
+  }
+
+  // 3. Only now evaluate argument expressions
+  const args = expr.arguments.map(arg => this.evaluate(arg));
+
+  // 4. Call via RuntimeEngine
+  return this.runtime.callFunction(callee, args);
+}
+
+
+  evalBinary(expr) {
+    const left = this.evaluate(expr.left);
+    const right = this.evaluate(expr.right);
+
+    switch (expr.operator) {
+      case "+":
+        return left + right;
+      case "-":
+        return left - right;
+      case "*":
+        return left * right;
+      case "/":
+        return left / right;
+      case "%":
+        return left % right;
+
+      case "==":
+        return left == right;
+      case "===":
+        return left === right;
+      case "!=":
+        return left != right;
+      case "!==":
+        return left !== right;
+
+      case "<":
+        return left < right;
+      case "<=":
+        return left <= right;
+      case ">":
+        return left > right;
+      case ">=":
+        return left >= right;
+
+      default:
+        return undefined;
+    }
+  }
+
+  evalAssignment(expr) {
+    const { operator, left, right } = expr;
+
+    if (left.type !== "Identifier") {
+      throw new Error("UC06 supports assignment to simple identifiers only");
+    }
+
+    const name = left.name;
+    const value = this.evaluate(right);
+
+    if (operator === "=") {
+      const envs = this.runtime.getCurrentEnvs();
+      this.runtime.variables.update(name, value, envs);
+      return value;
+    }
+
+    throw new Error(`Operator ${operator} not implemented in UC06`);
+  }
+}
+
+
 ===== ./engine/runtime-engine.js =====
 
 import * as acorn from "acorn";
@@ -59,6 +176,44 @@ export class RuntimeEngine {
     ctx.lexicalEnv = ctx.lexicalEnv.outer;
   }
 
+callFunction(fn, args) {
+
+    if (!fn || fn.type !== "FunctionObject") {
+    throw new Error("CallExpression: callee is not a function");
+  }
+
+  if (fn.params.length !== args.length) {
+    throw new Error(
+      `CallExpression: expected ${fn.params.length} arguments but got ${args.length}`
+    );
+  }
+
+  // 1. Push context frame
+  const ctx = this.contexts.callStack.pushContext(fn.name);
+
+  // 2. Replace lexical + variable env with fresh ones
+  const closure = fn.closure;
+
+  ctx.lexicalEnv = new ctx.lexicalEnv.constructor(closure);
+  ctx.variableEnv = new ctx.variableEnv.constructor(closure);
+
+  // 3. Bind parameters
+  fn.params.forEach((param, i) => {
+    ctx.lexicalEnv.define(param, args[i]);
+  });
+
+  // 4. Execute body
+  const completion = this.controlFlow.execute(fn.body.body);
+
+  // 5. Pop context
+  this.contexts.callStack.popContext();
+
+  // 6. Return value
+  return completion ? completion.value : undefined;
+}
+
+
+
   // ───────────────────────────────
   // Execution
   // ───────────────────────────────
@@ -86,183 +241,4 @@ export class RuntimeEngine {
 
     console.log("-".repeat(40));
   }
-}
-
-
-===== ./runtime-time/control-flow-workflow.js =====
-
-import { ExpressionEvaluator } from "../runtime-time/expression-evaluator.js";
-import { FunctionObject } from "./function-object.js";
-
-export class ControlFlowWorkflow {
-  constructor(runtime) {
-    this.runtime = runtime;
-    this.evaluator = new ExpressionEvaluator(runtime);
-  }
-
-  execute(body) {
-    for (const node of body) {
-      const result = this.dispatch(node);
-
-      // stop execution if return reached
-      if (result && result.type === "return") {
-        return result;
-      }
-    }
-  }
-
-  dispatch(node) {
-    if (node.type === "FunctionDeclaration") {
-      return this.handleFunctionDeclaration(node);
-    }
-
-    if (node.type === "VariableDeclaration") {
-      return this.handleVarDecl(node);
-    }
-
-    if (node.type === "BlockStatement") {
-      return this.handleBlock(node);
-    }
-
-    if (node.type === "ReturnStatement") {
-      const value = node.argument
-        ? this.evaluator.evaluate(node.argument)
-        : undefined;
-
-      return { type: "return", value };
-    }
-  }
-
-  handleVarDecl(node) {
-    const envs = this.runtime.getCurrentEnvs();
-
-    for (const decl of node.declarations) {
-      const name = decl.id.name;
-      const value = decl.init ? this.evaluator.evaluate(decl.init) : undefined;
-
-      this.runtime.define(name, value, node.kind, envs);
-    }
-  }
-
-  handleBlock(node) {
-    this.runtime.pushBlockEnv();
-
-    for (const stmt of node.body) {
-      const result = this.dispatch(stmt);
-
-      // Bubble return upward
-      if (result && result.type === "return") {
-        this.runtime.popBlockEnv();
-        return result;
-      }
-    }
-
-    this.runtime.popBlockEnv();
-  }
-
-  handleFunctionDeclaration(node) {
-  const name = node.id.name;
-  const params = node.params.map(p => p.name);
-  const body = node.body;
-  const closure = this.runtime.getCurrentEnvs().lexical;
-
-  const fn = new FunctionObject(name, params, body, closure);
-
-  // bind function into lexical environment (not var env)
-  closure.define(name, fn);
-
-  this.runtime.renderSnapshot(`define function ${name}`);
-  return fn;
-}
-
-}
-
-
-===== ./runtime-time/expression-evaluator.js =====
-
-export class ExpressionEvaluator {
-  constructor(runtime) {
-    this.runtime = runtime;
-  }
-
-  evaluate(expr) {
-    if (!expr) return undefined;
-
-    switch (expr.type) {
-      case "Literal":
-        return expr.value;
-
-      case "Identifier":
-        return this.runtime.resolve(expr.name);
-
-      case "BinaryExpression":
-        return this.evalBinary(expr);
-
-        case "AssignmentExpression":
-  return this.evalAssignment(expr);
-
-
-      default:
-        return undefined;
-    }
-  }
-
-  evalBinary(expr) {
-    const left = this.evaluate(expr.left);
-    const right = this.evaluate(expr.right);
-
-    switch (expr.operator) {
-      case "+":
-        return left + right;
-      case "-":
-        return left - right;
-      case "*":
-        return left * right;
-      case "/":
-        return left / right;
-      case "%":
-        return left % right;
-
-      case "==":
-        return left == right;
-      case "===":
-        return left === right;
-      case "!=":
-        return left != right;
-      case "!==":
-        return left !== right;
-
-      case "<":
-        return left < right;
-      case "<=":
-        return left <= right;
-      case ">":
-        return left > right;
-      case ">=":
-        return left >= right;
-
-      default:
-        return undefined;
-    }
-  }
-
-  evalAssignment(expr) {
-  const { operator, left, right } = expr;
-
-  if (left.type !== "Identifier") {
-    throw new Error("UC06 supports assignment to simple identifiers only");
-  }
-
-  const name = left.name;
-  const value = this.evaluate(right);
-
-  if (operator === "=") {
-    const envs = this.runtime.getCurrentEnvs();
-    this.runtime.variables.update(name, value, envs);
-    return value;
-  }
-
-  throw new Error(`Operator ${operator} not implemented in UC06`);
-}
-
 }

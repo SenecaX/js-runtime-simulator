@@ -27,11 +27,33 @@ export class ExpressionEvaluator {
     }
   }
 
-  evalCall(expr) {
-    const callee = this.evaluate(expr.callee);
-    const args = expr.arguments.map((arg) => this.evaluate(arg));
-    return this.runtime.callFunction(callee, args);
+evalCall(expr) {
+  // 1. Evaluate callee (must be a FunctionObject)
+  const callee = this.evaluate(expr.callee);
+
+if (!callee || callee.type !== "FunctionObject") {
+  throw new TypeError("CallExpression: callee is not a function");
+}
+
+
+  // 2. Validate argument count BEFORE evaluating arguments
+  const expected = callee.params.length;
+  const received = expr.arguments.length;
+
+  if (expected !== received) {
+throw new TypeError(
+  `CallExpression: expected ${expected} arguments but got ${received}`
+);
+
   }
+
+  // 3. Only now evaluate argument expressions
+  const args = expr.arguments.map(arg => this.evaluate(arg));
+
+  // 4. Call via RuntimeEngine
+  return this.runtime.callFunction(callee, args);
+}
+
 
   evalBinary(expr) {
     const left = this.evaluate(expr.left);
