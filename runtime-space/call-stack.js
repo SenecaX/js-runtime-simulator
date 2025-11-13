@@ -14,6 +14,8 @@ export class CallStack {
 
     const ctx = new ExecutionContext(name, outerLex, outerVar, depth);
     this.stack.push(ctx);
+return ctx;
+
   }
 
   popContext() {

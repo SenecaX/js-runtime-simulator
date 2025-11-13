@@ -55,6 +55,34 @@ export class RuntimeEngine {
     ctx.lexicalEnv = ctx.lexicalEnv.outer;
   }
 
+callFunction(fn, args) {
+
+  // 1. Push context frame
+  const ctx = this.contexts.callStack.pushContext(fn.name);
+
+  // 2. Replace lexical + variable env with fresh ones
+  const closure = fn.closure;
+
+  ctx.lexicalEnv = new ctx.lexicalEnv.constructor(closure);
+  ctx.variableEnv = new ctx.variableEnv.constructor(closure);
+
+  // 3. Bind parameters
+  fn.params.forEach((param, i) => {
+    ctx.lexicalEnv.define(param, args[i]);
+  });
+
+  // 4. Execute body
+  const completion = this.controlFlow.execute(fn.body.body);
+
+  // 5. Pop context
+  this.contexts.callStack.popContext();
+
+  // 6. Return value
+  return completion ? completion.value : undefined;
+}
+
+
+
   // ───────────────────────────────
   // Execution
   // ───────────────────────────────

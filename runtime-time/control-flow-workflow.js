@@ -35,9 +35,17 @@ export class ControlFlowWorkflow {
       const value = node.argument
         ? this.evaluator.evaluate(node.argument)
         : undefined;
+        
 
       return { type: "return", value };
     }
+
+    if (node.type === "ExpressionStatement") {
+  const value = this.evaluator.evaluate(node.expression);
+  this.runtime.lastValue = value;
+  return value;
+}
+
   }
 
   handleVarDecl(node) {
