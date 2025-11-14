@@ -25,41 +25,40 @@ export class ExpressionEvaluator {
         return this.evalCall(expr);
 
       case "FunctionExpression":
-  return this.evalFunctionExpression(expr);
+        return this.evalFunctionExpression(expr);
 
+      case "ArrowFunctionExpression":
+        return this.evalArrowFunction(expr);
 
       default:
         return undefined;
     }
   }
 
-evalCall(expr) {
-  // 1. Evaluate callee (must be a FunctionObject)
-  const callee = this.evaluate(expr.callee);
+  evalCall(expr) {
+    // 1. Evaluate callee (must be a FunctionObject)
+    const callee = this.evaluate(expr.callee);
 
-if (!callee || callee.type !== "FunctionObject") {
-  throw new TypeError("CallExpression: callee is not a function");
-}
+    if (!callee || callee.type !== "FunctionObject") {
+      throw new TypeError("CallExpression: callee is not a function");
+    }
 
+    // 2. Validate argument count BEFORE evaluating arguments
+    const expected = callee.params.length;
+    const received = expr.arguments.length;
 
-  // 2. Validate argument count BEFORE evaluating arguments
-  const expected = callee.params.length;
-  const received = expr.arguments.length;
+    if (expected !== received) {
+      throw new TypeError(
+        `CallExpression: expected ${expected} arguments but got ${received}`
+      );
+    }
 
-  if (expected !== received) {
-throw new TypeError(
-  `CallExpression: expected ${expected} arguments but got ${received}`
-);
+    // 3. Only now evaluate argument expressions
+    const args = expr.arguments.map((arg) => this.evaluate(arg));
 
+    // 4. Call via RuntimeEngine
+    return this.runtime.callFunction(callee, args);
   }
-
-  // 3. Only now evaluate argument expressions
-  const args = expr.arguments.map(arg => this.evaluate(arg));
-
-  // 4. Call via RuntimeEngine
-  return this.runtime.callFunction(callee, args);
-}
-
 
   evalBinary(expr) {
     const left = this.evaluate(expr.left);
@@ -120,12 +119,37 @@ throw new TypeError(
   }
 
   evalFunctionExpression(node) {
-  const name = node.id ? node.id.name : null;
+    const name = node.id ? node.id.name : null;
+    const params = node.params.map((p) => p.name);
+    const body = node.body;
+    const closure = this.runtime.getCurrentEnvs().lexical;
+
+    return new FunctionObject(name, params, body, closure);
+  }
+
+  evalArrowFunction(node) {
+  const name = null; // arrows have no name
   const params = node.params.map(p => p.name);
-  const body = node.body;
   const closure = this.runtime.getCurrentEnvs().lexical;
 
-  return new FunctionObject(name, params, body, closure);
+  // Case A — single-expression arrow:  x => x+1
+  if (node.body.type !== "BlockStatement") {
+    // wrap expression into: { return expr }
+    const returnStmt = {
+      type: "ReturnStatement",
+      argument: node.body
+    };
+
+    const body = {
+      type: "BlockStatement",
+      body: [returnStmt]
+    };
+
+    return new FunctionObject(name, params, body, closure);
+  }
+
+  // Case B — block body arrow: x => { ... }
+  return new FunctionObject(name, params, node.body, closure);
 }
 
 }
