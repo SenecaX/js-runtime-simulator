@@ -1,63 +1,90 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { RuntimeEngine } from "../engine/runtime-engine.js";
 
-function run(code) {
-  const rt = new RuntimeEngine();
-  rt.init();
-  rt.run(code);
-  const out = rt.lastValue;
-  rt.terminate();
-  return out;
-}
+//
+// UC11 — ArrowFunctionExpression
+//
 
 describe("UC11 — ArrowFunctionExpression", () => {
-  it("supports single-expression arrow function: x => x + 1", () => {
-    const result = run(`
+  let runtime;
+
+  beforeEach(() => {
+    runtime = new RuntimeEngine();
+    runtime.init();
+  });
+
+  afterEach(() => {
+    runtime.terminate();
+  });
+
+  // 1. Single param — single expression
+  it("evaluates x => x + 1", () => {
+    runtime.run(`
       const inc = x => x + 1;
       inc(5);
     `);
-    expect(result).toBe(6);
+
+    expect(runtime.lastValue).toBe(6);
   });
 
-  it("supports multi-parameter arrow: (a,b) => a + b", () => {
-    const result = run(`
-      const add = (a, b) => a + b;
+  // 2. Multi-param — single expression
+  it("evaluates (a,b) => a + b", () => {
+    runtime.run(`
+      const add = (a,b) => a + b;
       add(2, 3);
     `);
-    expect(result).toBe(5);
+
+    expect(runtime.lastValue).toBe(5);
   });
 
-  it("supports zero-parameter arrow: () => 42", () => {
-    const result = run(`
-      const f = () => 42;
-      f();
+  // 3. Block body arrow
+  it("evaluates x => { const y=x*2; return y+1; }", () => {
+    runtime.run(`
+      const f = x => { const y = x * 2; return y + 1; };
+      f(10);
     `);
-    expect(result).toBe(42);
+
+    expect(runtime.lastValue).toBe(21);
   });
 
-  it("supports inline arrow as call argument", () => {
-    const result = run(`
-      function g(fn) { return fn(10); }
-      g(x => x * 2);
+  // 4. Inline arrow invocation
+  it("evaluates (x => x*3)(4)", () => {
+    runtime.run(`
+      (x => x * 3)(4);
     `);
-    expect(result).toBe(20);
+
+    expect(runtime.lastValue).toBe(12);
   });
 
-  it("supports nested arrow invocation: (x => x+1)(4) * 3", () => {
-    const result = run(`
-      (x => x + 1)(4) * 3;
+  // 5. Arrow passed as callback
+  it("evaluates arrow passed as argument", () => {
+    runtime.run(`
+      const apply = (fn, v) => fn(v);
+      apply(x => x + 10, 7);
     `);
-    expect(result).toBe(15);
+
+    expect(runtime.lastValue).toBe(17);
   });
 
-  it("supports block body: x => { const y=x+1; return y*2; }", () => {
-    const result = run(`
-      const f = x => {
-        const y = x + 1;
-        return y * 2;
-      };
+  // 6. Arrow returning arrow
+  it("supports arrow returning another arrow", () => {
+    runtime.run(`
+      const outer = a => b => a + b;
+      outer(3)(4);
+    `);
+
+    expect(runtime.lastValue).toBe(7);
+  });
+
+  // 7. Arrow capturing outer lexical closure
+  it("captures closure correctly", () => {
+    runtime.run(`
+      const a = 10;
+      const f = x => x + a;
       f(5);
     `);
-    expect(result).toBe(12);
+
+    expect(runtime.lastValue).toBe(15);
   });
+
 });
