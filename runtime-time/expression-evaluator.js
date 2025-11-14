@@ -1,4 +1,5 @@
 import { FunctionObject } from "./function-object.js";
+import { UNINITIALIZED } from "../runtime-time/variable-resolution-workflow.js";
 
 export class ExpressionEvaluator {
   constructor(runtime) {
@@ -13,7 +14,8 @@ export class ExpressionEvaluator {
         return expr.value;
 
       case "Identifier":
-        return this.runtime.resolve(expr.name);
+          return this.resolveIdentifier(expr.name);
+
 
       case "BinaryExpression":
         return this.evalBinary(expr);
@@ -35,30 +37,47 @@ export class ExpressionEvaluator {
     }
   }
 
-  evalCall(expr) {
-    // 1. Evaluate callee (must be a FunctionObject)
-    const callee = this.evaluate(expr.callee);
+evalCall(expr) {
+  // Try normal resolution first
+  let callee = this.evaluate(expr.callee);
 
-    if (!callee || callee.type !== "FunctionObject") {
-      throw new TypeError("CallExpression: callee is not a function");
+  // If unresolved → fallback to var-environment for hoisted functions
+  if (!callee && expr.callee.type === "Identifier") {
+    const { lexical, variable } = this.runtime.getCurrentEnvs();
+
+    // hoisted function declarations live in lexical env
+    if (expr.callee.name in lexical.environmentRecord) {
+      callee = lexical.environmentRecord[expr.callee.name];
     }
 
-    // 2. Validate argument count BEFORE evaluating arguments
-    const expected = callee.params.length;
-    const received = expr.arguments.length;
-
-    if (expected !== received) {
-      throw new TypeError(
-        `CallExpression: expected ${expected} arguments but got ${received}`
-      );
+    // hoisted `var` function expressions (rare, but consistent)
+    else if (expr.callee.name in variable.environmentRecord) {
+      callee = variable.environmentRecord[expr.callee.name];
     }
-
-    // 3. Only now evaluate argument expressions
-    const args = expr.arguments.map((arg) => this.evaluate(arg));
-
-    // 4. Call via RuntimeEngine
-    return this.runtime.callFunction(callee, args);
   }
+
+  // Validate callee
+  if (!callee || callee.type !== "FunctionObject") {
+    throw new TypeError("CallExpression: callee is not a function");
+  }
+
+  // Validate argument count BEFORE evaluating them
+  const expected = callee.params.length;
+  const received = expr.arguments.length;
+
+  if (expected !== received) {
+    throw new TypeError(
+      `CallExpression: expected ${expected} arguments but got ${received}`
+    );
+  }
+
+  // Evaluate arguments
+  const args = expr.arguments.map(arg => this.evaluate(arg));
+
+  // Execute
+  return this.runtime.callFunction(callee, args);
+}
+
 
   evalBinary(expr) {
     const left = this.evaluate(expr.left);
@@ -151,5 +170,28 @@ export class ExpressionEvaluator {
   // Case B — block body arrow: x => { ... }
   return new FunctionObject(name, params, node.body, closure);
 }
+
+resolveIdentifier(name) {
+  const { lexical, variable } = this.runtime.getCurrentEnvs();
+
+// 1. lexical FIRST
+if (name in lexical.environmentRecord) {
+  const v = lexical.environmentRecord[name];
+  if (v === UNINITIALIZED) {
+    throw new ReferenceError(`${name} is not initialized`);
+  }
+  return v;
+}
+
+// 2. var SECOND
+if (name in variable.environmentRecord) {
+  return variable.environmentRecord[name];
+}
+
+
+  // 3. scope-chain fallback (outer envs)
+  return this.runtime.resolve(name);
+}
+
 
 }

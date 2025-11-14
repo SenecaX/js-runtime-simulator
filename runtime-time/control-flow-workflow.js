@@ -11,7 +11,6 @@ export class ControlFlowWorkflow {
     for (const node of body) {
       const result = this.dispatch(node);
 
-      // stop execution if return reached
       if (result && result.type === "return") {
         return result;
       }
@@ -19,8 +18,10 @@ export class ControlFlowWorkflow {
   }
 
   dispatch(node) {
+    // IMPORTANT — UC12:
+    // FunctionDeclaration is *ignored* during execution.
     if (node.type === "FunctionDeclaration") {
-      return this.handleFunctionDeclaration(node);
+      return; // Already hoisted + initialized in instantiation phase
     }
 
     if (node.type === "VariableDeclaration") {
@@ -46,14 +47,39 @@ export class ControlFlowWorkflow {
     }
   }
 
+  // IMPORTANT — UC12:
+  // During execution phase:
+  //   - var: assignment only (do NOT re-declare)
+  //   - let/const: initialize (first write), reject TDZ
   handleVarDecl(node) {
     const envs = this.runtime.getCurrentEnvs();
 
     for (const decl of node.declarations) {
       const name = decl.id.name;
-      const value = decl.init ? this.evaluator.evaluate(decl.init) : undefined;
 
-      this.runtime.define(name, value, node.kind, envs);
+      // No initializer → nothing to execute
+      if (!decl.init) continue;
+
+      const value = this.evaluator.evaluate(decl.init);
+
+      // var: assignment to existing binding
+      if (node.kind === "var") {
+        this.runtime.variables.update(name, value, envs);
+        continue;
+      }
+
+      // let/const: first write initializes TDZ binding
+      // This is the ES "InitializeBinding" step
+      const target = envs.lexical;
+
+      if (target.environmentRecord[name] !== undefined) {
+        // replace UNINITIALIZED with real value
+        target.set(name, value);
+        this.runtime.renderSnapshot(`initialize ${name} = ${value} (${node.kind})`);
+        continue;
+      }
+
+      // Should never reach here unless malformed AST
     }
   }
 
@@ -63,7 +89,6 @@ export class ControlFlowWorkflow {
     for (const stmt of node.body) {
       const result = this.dispatch(stmt);
 
-      // Bubble return upward
       if (result && result.type === "return") {
         this.runtime.popBlockEnv();
         return result;
@@ -71,20 +96,5 @@ export class ControlFlowWorkflow {
     }
 
     this.runtime.popBlockEnv();
-  }
-
-  handleFunctionDeclaration(node) {
-    const name = node.id.name;
-    const params = node.params.map((p) => p.name);
-    const body = node.body;
-    const closure = this.runtime.getCurrentEnvs().lexical;
-
-    const fn = new FunctionObject(name, params, body, closure);
-
-    // bind function into lexical environment (not var env)
-    closure.define(name, fn);
-
-    this.runtime.renderSnapshot(`define function ${name}`);
-    return fn;
   }
 }

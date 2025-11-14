@@ -1,10 +1,21 @@
+import { UNINITIALIZED } from "../runtime-time/variable-resolution-workflow.js";
+
 export class ScopeChain {
   static lookup(name, startEnv) {
     let env = startEnv;
 
     while (env) {
       if (name in env.environmentRecord) {
-        return env.environmentRecord[name];
+        const value = env.environmentRecord[name];
+
+        // TDZ detection happens here
+        if (value === UNINITIALIZED) {
+          throw new ReferenceError(
+            `${name} is accessed before initialization (TDZ)`
+          );
+        }
+
+        return value;
       }
 
       env = env.outer;
