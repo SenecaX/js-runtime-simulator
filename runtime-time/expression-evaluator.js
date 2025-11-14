@@ -1,3 +1,5 @@
+import { FunctionObject } from "./function-object.js";
+
 export class ExpressionEvaluator {
   constructor(runtime) {
     this.runtime = runtime;
@@ -21,6 +23,10 @@ export class ExpressionEvaluator {
 
       case "CallExpression":
         return this.evalCall(expr);
+
+      case "FunctionExpression":
+  return this.evalFunctionExpression(expr);
+
 
       default:
         return undefined;
@@ -112,4 +118,14 @@ throw new TypeError(
 
     throw new Error(`Operator ${operator} not implemented in UC06`);
   }
+
+  evalFunctionExpression(node) {
+  const name = node.id ? node.id.name : null;
+  const params = node.params.map(p => p.name);
+  const body = node.body;
+  const closure = this.runtime.getCurrentEnvs().lexical;
+
+  return new FunctionObject(name, params, body, closure);
+}
+
 }

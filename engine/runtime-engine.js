@@ -37,7 +37,12 @@ export class RuntimeEngine {
 
   define(name, value, kind, envs) {
     this.variables.define(name, value, kind, envs);
-    this.renderSnapshot(`define ${name} = ${JSON.stringify(value)} (${kind})`);
+        const safe =
+      value && value.type === "FunctionObject"
+        ? `[FunctionObject ${value.name}]`
+        : JSON.stringify(value);
+
+    this.renderSnapshot(`define ${name} = ${safe} (${kind})`);
   }
 
   resolve(name) {
