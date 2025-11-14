@@ -6,16 +6,24 @@ export class CallStack {
     this.stack = new Stack();
   }
 
-  pushContext(name) {
+  pushContext(name, closureLex = null, closureVar = null) {
     const prev = this.stack.peek();
+    const depth = this.stack.length;
+
+    // If closure is provided → function call context
+    if (closureLex !== null || closureVar !== null) {
+      const ctx = new ExecutionContext(name, closureLex, closureVar, depth);
+      this.stack.push(ctx);
+      return ctx;
+    }
+
+    // Otherwise → normal lexical inheritance (global / blocks)
     const outerLex = prev ? prev.lexicalEnv : null;
     const outerVar = prev ? prev.variableEnv : null;
-    const depth = this.stack.length;
 
     const ctx = new ExecutionContext(name, outerLex, outerVar, depth);
     this.stack.push(ctx);
-return ctx;
-
+    return ctx;
   }
 
   popContext() {

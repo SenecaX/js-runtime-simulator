@@ -3,10 +3,12 @@ import { ContextLifecycleWorkflow } from "../runtime-time/context-lifecycle-work
 import { VariableResolutionWorkflow } from "../runtime-time/variable-resolution-workflow.js";
 import { ControlFlowWorkflow } from "../runtime-time/control-flow-workflow.js";
 import { TerminalRenderer as T } from "../ui/terminal-renderer.js";
+import { LexicalEnvironment } from "../runtime-space/lexical-environment.js";
+import { VariableEnvironment } from "../runtime-space/variable-environment.js";
 
 export class RuntimeEngine {
-    lastValue = undefined;
-    
+  lastValue = undefined;
+
   constructor() {
     this.contexts = new ContextLifecycleWorkflow();
     this.variables = new VariableResolutionWorkflow();
@@ -37,7 +39,7 @@ export class RuntimeEngine {
 
   define(name, value, kind, envs) {
     this.variables.define(name, value, kind, envs);
-        const safe =
+    const safe =
       value && value.type === "FunctionObject"
         ? `[FunctionObject ${value.name}]`
         : JSON.stringify(value);
@@ -49,56 +51,62 @@ export class RuntimeEngine {
     const envs = this.getCurrentEnvs();
     return this.variables.resolve(name, envs);
   }
+  
+pushBlockEnv() {
+  const ctx = this.contexts.currentContext();
+  ctx.lexicalEnv = new LexicalEnvironment(ctx.lexicalEnv);
+}
 
-  pushBlockEnv() {
-    const ctx = this.contexts.currentContext();
-    ctx.lexicalEnv = new ctx.lexicalEnv.constructor(ctx.lexicalEnv);
-  }
 
   popBlockEnv() {
     const ctx = this.contexts.currentContext();
     ctx.lexicalEnv = ctx.lexicalEnv.outer;
   }
 
-callFunction(fn, args) {
+  callFunction(fn, args) {
+    if (!fn || fn.type !== "FunctionObject") {
+      throw new TypeError("CallExpression: callee is not a function");
+    }
 
-if (!fn || fn.type !== "FunctionObject") {
-  throw new TypeError("CallExpression: callee is not a function");
-}
+    if (fn.params.length !== args.length) {
+      throw new TypeError(
+        `CallExpression: expected ${fn.params.length} arguments but got ${args.length}`
+      );
+    }
 
+    // 1. Push new frame
 
-  if (fn.params.length !== args.length) {
-throw new TypeError(
-  `CallExpression: expected ${fn.params.length} arguments but got ${args.length}`
+    const ctx = this.contexts.callStack.pushContext(
+  fn.name,
+  fn.closure,                     // lexical closure parent
+  this.variables.globalVariable   // var environment parent (JS spec)
 );
 
+    this.renderSnapshot(`call ${fn.name}(${args.join(", ")})`);
+
+    // 2. Fresh lexical + variable env based on closure
+    const closure = fn.closure;
+    ctx.lexicalEnv = new LexicalEnvironment(closure);
+    ctx.variableEnv = new VariableEnvironment(closure);
+
+    // 3. Bind params
+    fn.params.forEach((param, i) => {
+      ctx.lexicalEnv.define(param, args[i]);
+    });
+
+    // 4. Execute function body
+    const completion = this.controlFlow.execute(fn.body.body);
+
+    // 5. Pop frame
+    this.contexts.callStack.popContext();
+
+    // 6. Log exit
+    this.renderSnapshot(
+      `return from ${fn.name} => ${completion ? completion.value : undefined}`
+    );
+
+    return completion ? completion.value : undefined;
   }
-
-  // 1. Push context frame
-  const ctx = this.contexts.callStack.pushContext(fn.name);
-
-  // 2. Replace lexical + variable env with fresh ones
-  const closure = fn.closure;
-
-  ctx.lexicalEnv = new ctx.lexicalEnv.constructor(closure);
-  ctx.variableEnv = new ctx.variableEnv.constructor(closure);
-
-  // 3. Bind parameters
-  fn.params.forEach((param, i) => {
-    ctx.lexicalEnv.define(param, args[i]);
-  });
-
-  // 4. Execute body
-  const completion = this.controlFlow.execute(fn.body.body);
-
-  // 5. Pop context
-  this.contexts.callStack.popContext();
-
-  // 6. Return value
-  return completion ? completion.value : undefined;
-}
-
-
 
   // ───────────────────────────────
   // Execution
@@ -118,12 +126,18 @@ throw new TypeError(
 
     console.log(T.header(`ACTION: ${action}`));
 
-    console.log(T.block("CALL STACK", T.formatCallStack(frames)));
+    // Execution context tree
+    console.log(
+      T.block("CALL STACK (execution contexts)", T.formatCallStack(frames))
+    );
 
-    console.log(T.block("LexicalEnv Chain", T.formatEnvChain(envs.lexical)));
-
-
-    console.log(T.block("VariableEnv Chain", T.formatEnvChain(envs.variable)));
+    // Lexical / var scope trees
+    console.log(
+      T.block("LEXICAL SCOPE CHAIN", T.formatLexicalChain(envs.lexical))
+    );
+    console.log(
+      T.block("VARIABLE SCOPE CHAIN", T.formatVariableChain(envs.variable))
+    );
 
     console.log("-".repeat(40));
   }

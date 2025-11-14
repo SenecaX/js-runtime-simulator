@@ -35,17 +35,15 @@ export class ControlFlowWorkflow {
       const value = node.argument
         ? this.evaluator.evaluate(node.argument)
         : undefined;
-        
 
       return { type: "return", value };
     }
 
     if (node.type === "ExpressionStatement") {
-  const value = this.evaluator.evaluate(node.expression);
-  this.runtime.lastValue = value;
-  return value;
-}
-
+      const value = this.evaluator.evaluate(node.expression);
+      this.runtime.lastValue = value;
+      return value;
+    }
   }
 
   handleVarDecl(node) {
@@ -76,18 +74,17 @@ export class ControlFlowWorkflow {
   }
 
   handleFunctionDeclaration(node) {
-  const name = node.id.name;
-  const params = node.params.map(p => p.name);
-  const body = node.body;
-  const closure = this.runtime.getCurrentEnvs().lexical;
+    const name = node.id.name;
+    const params = node.params.map((p) => p.name);
+    const body = node.body;
+    const closure = this.runtime.getCurrentEnvs().lexical;
 
-  const fn = new FunctionObject(name, params, body, closure);
+    const fn = new FunctionObject(name, params, body, closure);
 
-  // bind function into lexical environment (not var env)
-  closure.define(name, fn);
+    // bind function into lexical environment (not var env)
+    closure.define(name, fn);
 
-  this.runtime.renderSnapshot(`define function ${name}`);
-  return fn;
-}
-
+    this.runtime.renderSnapshot(`define function ${name}`);
+    return fn;
+  }
 }

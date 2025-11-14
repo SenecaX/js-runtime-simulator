@@ -1,5 +1,95 @@
 
 
+===== ./ui/terminal-renderer.js =====
+
+export class TerminalRenderer {
+  static header(label) {
+    return `\n${label}\n${"-".repeat(40)}`;
+  }
+
+  static block(label, content) {
+    return `${label}:\n${content}`;
+  }
+
+  // ───────────────────────────────────────
+  // CALL STACK (tree style)
+  // ───────────────────────────────────────
+  static formatCallStack(frames) {
+    return frames
+      .map((ctx, i) => {
+        const indent = "  ".repeat(i);
+        return `${indent}└─ ${ctx.summary()}`;
+      })
+      .join("\n");
+  }
+
+  // ───────────────────────────────────────
+  // LEXICAL ENV CHAIN (annotated tree)
+  // ───────────────────────────────────────
+  static formatLexicalChain(env) {
+    let lines = [];
+    let cur = env;
+    let depth = 0;
+
+    while (cur) {
+      const indent = "  ".repeat(depth);
+      const label = depth === 0 ? "current lexical env" : "outer lexical env";
+
+      const entries = this._formatEnvEntries(cur.environmentRecord);
+      lines.push(`${indent}└─ ${label}: ${entries}`);
+
+      cur = cur.outer;
+      depth++;
+    }
+
+    return lines.join("\n");
+  }
+
+  // ───────────────────────────────────────
+  // VARIABLE ENV CHAIN (annotated tree)
+  // ───────────────────────────────────────
+  static formatVariableChain(env) {
+    let lines = [];
+    let cur = env;
+    let depth = 0;
+
+    while (cur) {
+      const indent = "  ".repeat(depth);
+      const label = depth === 0 ? "current var env" : "outer var env";
+
+      const entries = this._formatEnvEntries(cur.environmentRecord);
+      lines.push(`${indent}└─ ${label}: ${entries}`);
+
+      cur = cur.outer;
+      depth++;
+    }
+
+    return lines.join("\n");
+  }
+
+  // ───────────────────────────────────────
+  // Helpers
+  // ───────────────────────────────────────
+  static _formatEnvEntries(record) {
+    const entries = Object.entries(record);
+    if (entries.length === 0) return "{}";
+
+    return (
+      "{ " +
+      entries
+        .map(([k, v]) => {
+          if (v?.type === "FunctionObject") {
+            return `${k}: [FunctionObject ${v.name}]`;
+          }
+          return `${k}: ${JSON.stringify(v)}`;
+        })
+        .join(", ") +
+      " }"
+    );
+  }
+}
+
+
 ===== ./engine/runtime-engine.js =====
 
 import * as acorn from "acorn";
@@ -7,10 +97,12 @@ import { ContextLifecycleWorkflow } from "../runtime-time/context-lifecycle-work
 import { VariableResolutionWorkflow } from "../runtime-time/variable-resolution-workflow.js";
 import { ControlFlowWorkflow } from "../runtime-time/control-flow-workflow.js";
 import { TerminalRenderer as T } from "../ui/terminal-renderer.js";
+import { LexicalEnvironment } from "../runtime-space/lexical-environment.js";
+import { VariableEnvironment } from "../runtime-space/variable-environment.js";
 
 export class RuntimeEngine {
-    lastValue = undefined;
-    
+  lastValue = undefined;
+
   constructor() {
     this.contexts = new ContextLifecycleWorkflow();
     this.variables = new VariableResolutionWorkflow();
@@ -41,63 +133,74 @@ export class RuntimeEngine {
 
   define(name, value, kind, envs) {
     this.variables.define(name, value, kind, envs);
-    this.renderSnapshot(`define ${name} = ${JSON.stringify(value)} (${kind})`);
+    const safe =
+      value && value.type === "FunctionObject"
+        ? `[FunctionObject ${value.name}]`
+        : JSON.stringify(value);
+
+    this.renderSnapshot(`define ${name} = ${safe} (${kind})`);
   }
 
   resolve(name) {
     const envs = this.getCurrentEnvs();
     return this.variables.resolve(name, envs);
   }
+  
+pushBlockEnv() {
+  const ctx = this.contexts.currentContext();
+  ctx.lexicalEnv = new LexicalEnvironment(ctx.lexicalEnv);
+}
 
-  pushBlockEnv() {
-    const ctx = this.contexts.currentContext();
-    ctx.lexicalEnv = new ctx.lexicalEnv.constructor(ctx.lexicalEnv);
-  }
 
   popBlockEnv() {
     const ctx = this.contexts.currentContext();
     ctx.lexicalEnv = ctx.lexicalEnv.outer;
   }
 
-callFunction(fn, args) {
+  callFunction(fn, args) {
+    if (!fn || fn.type !== "FunctionObject") {
+      throw new TypeError("CallExpression: callee is not a function");
+    }
 
-if (!fn || fn.type !== "FunctionObject") {
-  throw new TypeError("CallExpression: callee is not a function");
-}
+    if (fn.params.length !== args.length) {
+      throw new TypeError(
+        `CallExpression: expected ${fn.params.length} arguments but got ${args.length}`
+      );
+    }
 
+    // 1. Push new frame
 
-  if (fn.params.length !== args.length) {
-throw new TypeError(
-  `CallExpression: expected ${fn.params.length} arguments but got ${args.length}`
+    const ctx = this.contexts.callStack.pushContext(
+  fn.name,
+  fn.closure,                     // lexical closure parent
+  this.variables.globalVariable   // var environment parent (JS spec)
 );
 
+    this.renderSnapshot(`call ${fn.name}(${args.join(", ")})`);
+
+    // 2. Fresh lexical + variable env based on closure
+    const closure = fn.closure;
+    ctx.lexicalEnv = new LexicalEnvironment(closure);
+    ctx.variableEnv = new VariableEnvironment(closure);
+
+    // 3. Bind params
+    fn.params.forEach((param, i) => {
+      ctx.lexicalEnv.define(param, args[i]);
+    });
+
+    // 4. Execute function body
+    const completion = this.controlFlow.execute(fn.body.body);
+
+    // 5. Pop frame
+    this.contexts.callStack.popContext();
+
+    // 6. Log exit
+    this.renderSnapshot(
+      `return from ${fn.name} => ${completion ? completion.value : undefined}`
+    );
+
+    return completion ? completion.value : undefined;
   }
-
-  // 1. Push context frame
-  const ctx = this.contexts.callStack.pushContext(fn.name);
-
-  // 2. Replace lexical + variable env with fresh ones
-  const closure = fn.closure;
-
-  ctx.lexicalEnv = new ctx.lexicalEnv.constructor(closure);
-  ctx.variableEnv = new ctx.variableEnv.constructor(closure);
-
-  // 3. Bind parameters
-  fn.params.forEach((param, i) => {
-    ctx.lexicalEnv.define(param, args[i]);
-  });
-
-  // 4. Execute body
-  const completion = this.controlFlow.execute(fn.body.body);
-
-  // 5. Pop context
-  this.contexts.callStack.popContext();
-
-  // 6. Return value
-  return completion ? completion.value : undefined;
-}
-
-
 
   // ───────────────────────────────
   // Execution
@@ -117,591 +220,19 @@ throw new TypeError(
 
     console.log(T.header(`ACTION: ${action}`));
 
-    console.log(T.block("CALL STACK", T.formatCallStack(frames)));
+    // Execution context tree
+    console.log(
+      T.block("CALL STACK (execution contexts)", T.formatCallStack(frames))
+    );
 
-    console.log(T.block("LexicalEnv Chain", T.formatEnvChain(envs.lexical)));
-
-
-    console.log(T.block("VariableEnv Chain", T.formatEnvChain(envs.variable)));
+    // Lexical / var scope trees
+    console.log(
+      T.block("LEXICAL SCOPE CHAIN", T.formatLexicalChain(envs.lexical))
+    );
+    console.log(
+      T.block("VARIABLE SCOPE CHAIN", T.formatVariableChain(envs.variable))
+    );
 
     console.log("-".repeat(40));
-  }
-}
-
-
-===== ./core/stack.js =====
-
-export class Stack {
-  constructor() {
-    this.items = [];
-  }
-
-  push(item) {
-    this.items.push(item);
-  }
-
-  pop() {
-    return this.items.pop();
-  }
-
-  peek() {
-    return this.items[this.items.length - 1];
-  }
-
-  get length() {
-    return this.items.length;
-  }
-}
-
-
-===== ./runtime-space/call-stack.js =====
-
-import { Stack } from "../core/stack.js";
-import { ExecutionContext } from "./execution-context.js";
-
-export class CallStack {
-  constructor() {
-    this.stack = new Stack();
-  }
-
-  pushContext(name) {
-    const prev = this.stack.peek();
-    const outerLex = prev ? prev.lexicalEnv : null;
-    const outerVar = prev ? prev.variableEnv : null;
-    const depth = this.stack.length;
-
-    const ctx = new ExecutionContext(name, outerLex, outerVar, depth);
-    this.stack.push(ctx);
-return ctx;
-
-  }
-
-  popContext() {
-    return this.stack.pop();
-  }
-
-  peekContext() {
-    return this.stack.peek();
-  }
-
-  printStack() {
-    return this.stack.items;
-  }
-}
-
-
-===== ./runtime-space/execution-context.js =====
-
-import { LexicalEnvironment } from "../runtime-space/lexical-environment.js";
-import { VariableEnvironment } from "../runtime-space/variable-environment.js";
-
-export class ExecutionContext {
-  constructor(name, outerLexical = null, outerVariable = null, depth = 0) {
-    this.name = name;
-    this.lexicalEnv = new LexicalEnvironment(outerLexical);
-    this.variableEnv = new VariableEnvironment(outerVariable);
-    this.depth = depth;
-  }
-
-  summary() {
-    return `${this.name} (Depth: ${this.depth})`;
-  }
-}
-
-
-===== ./runtime-space/lexical-environment.js =====
-
-export class LexicalEnvironment {
-  constructor(outer = null) {
-    this.environmentRecord = {};
-    this.outer = outer;
-  }
-
-  define(name, value) {
-    this.environmentRecord[name] = value;
-  }
-
-  set(name, value) {
-    if (name in this.environmentRecord) {
-      this.environmentRecord[name] = value;
-    } else if (this.outer) {
-      this.outer.set(name, value);
-    } else {
-      throw new ReferenceError(`${name} is not defined`);
-    }
-  }
-
-  lookup(name) {
-    if (name in this.environmentRecord) return this.environmentRecord[name];
-    if (this.outer) return this.outer.lookup(name);
-    return undefined;
-  }
-}
-
-
-===== ./runtime-space/variable-environment.js =====
-
-export class VariableEnvironment {
-  constructor(outer = null) {
-    this.environmentRecord = {};
-    this.outer = outer;
-  }
-
-  define(name, value) {
-    this.environmentRecord[name] = value;
-  }
-
-  set(name, value) {
-    if (name in this.environmentRecord) {
-      this.environmentRecord[name] = value;
-    } else if (this.outer) {
-      this.outer.set(name, value);
-    } else {
-      throw new ReferenceError(`${name} is not defined`);
-    }
-  }
-
-  lookup(name) {
-    if (name in this.environmentRecord) return this.environmentRecord[name];
-    if (this.outer) return this.outer.lookup(name);
-    return undefined;
-  }
-}
-
-
-===== ./runtime-space/scope-chain.js =====
-
-export class ScopeChain {
-  static lookup(name, startEnv) {
-    let env = startEnv;
-
-    while (env) {
-      if (name in env.environmentRecord) {
-        return env.environmentRecord[name];
-      }
-
-      env = env.outer;
-    }
-
-    throw new ReferenceError(`${name} is not defined`);
-  }
-
-  static print(startEnv) {
-    let env = startEnv;
-    const chain = [];
-    while (env) {
-      chain.push(Object.keys(env.environmentRecord));
-      env = env.outer;
-    }
-    console.log(chain);
-  }
-}
-
-
-===== ./runtime-time/context-lifecycle-workflow.js =====
-
-import { CallStack } from "../runtime-space/call-stack.js";
-
-export class ContextLifecycleWorkflow {
-  constructor() {
-    this.callStack = new CallStack();
-  }
-
-  // Create Global Execution Context
-  initializeGlobalContext() {
-    this.callStack.pushContext("Global");
-  }
-
-  // No function context handling for UC01, but keep API for future
-  enterFunction(name) {
-    this.callStack.pushContext(name);
-  }
-
-  exitFunction() {
-    this.callStack.popContext();
-  }
-
-  terminate() {
-    this.callStack.popContext(); // remove Global frame
-  }
-
-  currentContext() {
-    return this.callStack.peekContext();
-  }
-}
-
-
-===== ./runtime-time/control-flow-workflow.js =====
-
-import { ExpressionEvaluator } from "../runtime-time/expression-evaluator.js";
-import { FunctionObject } from "./function-object.js";
-
-export class ControlFlowWorkflow {
-  constructor(runtime) {
-    this.runtime = runtime;
-    this.evaluator = new ExpressionEvaluator(runtime);
-  }
-
-  execute(body) {
-    for (const node of body) {
-      const result = this.dispatch(node);
-
-      // stop execution if return reached
-      if (result && result.type === "return") {
-        return result;
-      }
-    }
-  }
-
-  dispatch(node) {
-    if (node.type === "FunctionDeclaration") {
-      return this.handleFunctionDeclaration(node);
-    }
-
-    if (node.type === "VariableDeclaration") {
-      return this.handleVarDecl(node);
-    }
-
-    if (node.type === "BlockStatement") {
-      return this.handleBlock(node);
-    }
-
-    if (node.type === "ReturnStatement") {
-      const value = node.argument
-        ? this.evaluator.evaluate(node.argument)
-        : undefined;
-        
-
-      return { type: "return", value };
-    }
-
-    if (node.type === "ExpressionStatement") {
-  const value = this.evaluator.evaluate(node.expression);
-  this.runtime.lastValue = value;
-  return value;
-}
-
-  }
-
-  handleVarDecl(node) {
-    const envs = this.runtime.getCurrentEnvs();
-
-    for (const decl of node.declarations) {
-      const name = decl.id.name;
-      const value = decl.init ? this.evaluator.evaluate(decl.init) : undefined;
-
-      this.runtime.define(name, value, node.kind, envs);
-    }
-  }
-
-  handleBlock(node) {
-    this.runtime.pushBlockEnv();
-
-    for (const stmt of node.body) {
-      const result = this.dispatch(stmt);
-
-      // Bubble return upward
-      if (result && result.type === "return") {
-        this.runtime.popBlockEnv();
-        return result;
-      }
-    }
-
-    this.runtime.popBlockEnv();
-  }
-
-  handleFunctionDeclaration(node) {
-  const name = node.id.name;
-  const params = node.params.map(p => p.name);
-  const body = node.body;
-  const closure = this.runtime.getCurrentEnvs().lexical;
-
-  const fn = new FunctionObject(name, params, body, closure);
-
-  // bind function into lexical environment (not var env)
-  closure.define(name, fn);
-
-  this.runtime.renderSnapshot(`define function ${name}`);
-  return fn;
-}
-
-}
-
-
-===== ./runtime-time/variable-resolution-workflow.js =====
-
-import { LexicalEnvironment } from "../runtime-space/lexical-environment.js";
-import { VariableEnvironment } from "../runtime-space/variable-environment.js";
-import { ScopeChain } from "../runtime-space/scope-chain.js";
-import { EnvironmentRouter } from "../runtime-time/environment-router.js";
-
-export class VariableResolutionWorkflow {
-  constructor() {
-    // Global base environments
-    this.globalLexical = new LexicalEnvironment();
-    this.globalVariable = new VariableEnvironment();
-
-    // Router decides where let/var/const go
-    this.router = new EnvironmentRouter(
-      this.globalLexical,
-      this.globalVariable
-    );
-  }
-
-  define(name, value, kind, envs) {
-    const target = this.router.select(kind, envs);
-    target.define(name, value);
-  }
-
-  resolve(name, envs) {
-    try {
-      // lexical first
-      return ScopeChain.lookup(name, envs.lexical);
-    } catch {
-      // fallback to var space
-      try {
-        return ScopeChain.lookup(name, envs.variable);
-      } catch {
-        return undefined;
-      }
-    }
-  }
-
-  update(name, value, envs) {
-  // 1. lexical chain first
-  let env = envs.lexical;
-  while (env) {
-    if (name in env.environmentRecord) {
-      env.set(name, value);
-      return value;
-    }
-    env = env.outer;
-  }
-
-  // 2. fallback to variable chain
-  env = envs.variable;
-  while (env) {
-    if (name in env.environmentRecord) {
-      env.set(name, value);
-      return value;
-    }
-    env = env.outer;
-  }
-
-  // 3. not found
-  throw new ReferenceError(`${name} is not defined`);
-}
-
-}
-
-
-===== ./runtime-time/expression-evaluator.js =====
-
-export class ExpressionEvaluator {
-  constructor(runtime) {
-    this.runtime = runtime;
-  }
-
-  evaluate(expr) {
-    if (!expr) return undefined;
-
-    switch (expr.type) {
-      case "Literal":
-        return expr.value;
-
-      case "Identifier":
-        return this.runtime.resolve(expr.name);
-
-      case "BinaryExpression":
-        return this.evalBinary(expr);
-
-      case "AssignmentExpression":
-        return this.evalAssignment(expr);
-
-      case "CallExpression":
-        return this.evalCall(expr);
-
-      default:
-        return undefined;
-    }
-  }
-
-evalCall(expr) {
-  // 1. Evaluate callee (must be a FunctionObject)
-  const callee = this.evaluate(expr.callee);
-
-if (!callee || callee.type !== "FunctionObject") {
-  throw new TypeError("CallExpression: callee is not a function");
-}
-
-
-  // 2. Validate argument count BEFORE evaluating arguments
-  const expected = callee.params.length;
-  const received = expr.arguments.length;
-
-  if (expected !== received) {
-throw new TypeError(
-  `CallExpression: expected ${expected} arguments but got ${received}`
-);
-
-  }
-
-  // 3. Only now evaluate argument expressions
-  const args = expr.arguments.map(arg => this.evaluate(arg));
-
-  // 4. Call via RuntimeEngine
-  return this.runtime.callFunction(callee, args);
-}
-
-
-  evalBinary(expr) {
-    const left = this.evaluate(expr.left);
-    const right = this.evaluate(expr.right);
-
-    switch (expr.operator) {
-      case "+":
-        return left + right;
-      case "-":
-        return left - right;
-      case "*":
-        return left * right;
-      case "/":
-        return left / right;
-      case "%":
-        return left % right;
-
-      case "==":
-        return left == right;
-      case "===":
-        return left === right;
-      case "!=":
-        return left != right;
-      case "!==":
-        return left !== right;
-
-      case "<":
-        return left < right;
-      case "<=":
-        return left <= right;
-      case ">":
-        return left > right;
-      case ">=":
-        return left >= right;
-
-      default:
-        return undefined;
-    }
-  }
-
-  evalAssignment(expr) {
-    const { operator, left, right } = expr;
-
-    if (left.type !== "Identifier") {
-      throw new Error("UC06 supports assignment to simple identifiers only");
-    }
-
-    const name = left.name;
-    const value = this.evaluate(right);
-
-    if (operator === "=") {
-      const envs = this.runtime.getCurrentEnvs();
-      this.runtime.variables.update(name, value, envs);
-      return value;
-    }
-
-    throw new Error(`Operator ${operator} not implemented in UC06`);
-  }
-}
-
-
-===== ./runtime-time/function-object.js =====
-
-export class FunctionObject {
-  constructor(name, params, body, closure) {
-    this.type = "FunctionObject";
-    this.name = name;
-    this.params = params;
-    this.body = body;
-    this.closure = closure;
-  }
-}
-
-
-===== ./runtime-time/environment-router.js =====
-
-export class EnvironmentRouter {
-  constructor(globalLexical, globalVariable) {
-    this.globalLexical = globalLexical;
-    this.globalVariable = globalVariable;
-  }
-
-  // Decide which environment receives the binding
-  select(kind, envs) {
-    const isVar  = kind === "var";
-    const isLet  = kind === "let";
-    const isConst = kind === "const";
-
-    const lexicalEnv = envs.lexical;
-    const variableEnv = envs.variable;
-
-    // var → variable environment
-    if (isVar) return variableEnv;
-
-    // let/const → lexical environment
-    if (isLet || isConst) return lexicalEnv;
-
-    // default fallback (not used in UC01)
-    return lexicalEnv;
-  }
-}
-
-
-===== ./ui/terminal-renderer.js =====
-
-export class TerminalRenderer {
-  static header(label) {
-    return `\n${label}\n${"-".repeat(40)}`;
-  }
-
-  static block(label, content) {
-    return `${label}:\n${content}`;
-  }
-
-  static formatEnv(env) {
-    const entries = Object.entries(env.environmentRecord);
-    if (entries.length === 0) return "{}";
-    return (
-      "{ " +
-      entries.map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(", ") +
-      " }"
-    );
-  }
-
-  static formatCallStack(frames) {
-    return frames.map((ctx, i) => `  [${i}] ${ctx.summary()}`).join("\n");
-  }
-
-  static formatEnvChain(env) {
-    let output = [];
-    let cur = env;
-    let level = 0;
-
-    while (cur) {
-      const entries = Object.entries(cur.environmentRecord)
-        .map(([k, v]) => {
-          if (v && v.type === "FunctionObject") {
-            return `${k}: [FunctionObject ${v.name}]`;
-          }
-          return `${k}: ${JSON.stringify(v)}`;
-        })
-
-        .join(", ");
-
-      output.push(`  [${level}] { ${entries} }`);
-      cur = cur.outer;
-      level++;
-    }
-
-    return output.join("\n");
   }
 }
