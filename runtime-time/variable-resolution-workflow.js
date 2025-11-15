@@ -1,14 +1,13 @@
 // runtime-time/variable-resolution-workflow.js
 import { LexicalEnvironment } from "../runtime-space/lexical-environment.js";
 import { VariableEnvironment } from "../runtime-space/variable-environment.js";
-import { ScopeChain } from "../runtime-space/scope-chain.js";
 import { EnvironmentRouter } from "../runtime-time/environment-router.js";
 
 export const UNINITIALIZED = Symbol("UNINITIALIZED");
 
 export class VariableResolutionWorkflow {
   constructor() {
-    // Unified global environments (UC12 requirement)
+    // Unified global environments 
     this.globalLexical = new LexicalEnvironment(null);
     this.globalVariable = new VariableEnvironment(null);
 
@@ -18,11 +17,6 @@ export class VariableResolutionWorkflow {
     );
   }
 
-  // ────────────────────────────────────────────────
-  // DECLARATION INSTANTIATION PHASE ("define")
-  // UC12 requires that define() uses the router but
-  // DOES NOT initialize let/const — they receive UNINITIALIZED.
-  // ────────────────────────────────────────────────
 define(name, value, kind, envs) {
   const target = this.router.select(kind, envs);
 
@@ -41,11 +35,6 @@ define(name, value, kind, envs) {
   target.define(name, undefined);
 }
 
-
-  // ────────────────────────────────────────────────
-  // RESOLUTION (Identifier)
-  // UC12: TDZ MUST throw if accessed before initialization.
-  // ────────────────────────────────────────────────
 resolve(name, envs) {
   //
   // 1. lexical chain first (let, const, function)
@@ -82,11 +71,6 @@ resolve(name, envs) {
   throw new ReferenceError(`${name} is not defined`);
 }
 
-
-  // ────────────────────────────────────────────────
-  // UPDATE (Assignment)
-  // UC12: assignment must ALSO reject TDZ cases.
-  // ────────────────────────────────────────────────
   update(name, value, envs) {
     // 1. lexical chain
     let env = envs.lexical;

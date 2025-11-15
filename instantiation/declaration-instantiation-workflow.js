@@ -9,15 +9,9 @@ export class DeclarationInstantiationWorkflow {
     this.runtime = runtime;
   }
 
-  /**
-   * Full UC12 — Global Declaration Instantiation
-   * MUST:
-   * 1. Create fresh global lexical + variable environments
-   * 2. Populate them with all hoisted bindings
-   * 3. Return them so RuntimeEngine can install the Global Execution Context
-   */
   instantiateGlobal(ast) {
-    // 1 — fresh global environments (CRITICAL FIX)
+    // 1 — fresh global environments
+
     const globalLex = new LexicalEnvironment(null);
     const globalVar = new VariableEnvironment(null);
 
@@ -36,7 +30,7 @@ export class DeclarationInstantiationWorkflow {
     // 3 — hoist functions (initialized)
     for (const node of fns) {
       const name = node.id.name;
-      const params = node.params.map(p => p.name);
+      const params = node.params.map((p) => p.name);
       const closure = globalLex;
 
       const fn = new FunctionObject(name, params, node.body, closure);
@@ -57,6 +51,10 @@ export class DeclarationInstantiationWorkflow {
     for (const name of consts) {
       globalLex.define(name, UNINITIALIZED);
     }
+
+    // PHASE 2 — INSTANTIATE logs
+    console.log("GLOBAL LEXICAL:", globalLex.environmentRecord);
+    console.log("GLOBAL VARIABLE:", globalVar.environmentRecord);
 
     // 7 — return for RuntimeEngine.run()
     return { globalLex, globalVar };

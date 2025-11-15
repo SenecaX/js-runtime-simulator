@@ -5,32 +5,24 @@ export class ContextLifecycleWorkflow {
   constructor() {
     this.callStack = new CallStack();
 
-    this.globalLex = null; // UC12 injected lexical env
-    this.globalVar = null; // UC12 injected var env
+    this.globalLex = null;
+    this.globalVar = null;
   }
 
-  /**
-   * UC12–correct version:
-   * The Global Execution Context must directly use the already-created
-   * global lexical (let/const/function) and global variable (var) environments.
-   *
-   * No new LexicalEnvironment/VariableEnvironment may be created here.
-   */
   initializeGlobalContext(injectedLex, injectedVar) {
     // Store injected envs
     this.globalLex = injectedLex;
     this.globalVar = injectedVar;
 
     // Push the Global Execution Context using exactly these envs
-this.callStack.pushContext(
-  "Global",
-  null,
-  null,
-  0,              // depth
-  injectedLex,    // injected lexical env
-  injectedVar     // injected var env
-);
-
+    this.callStack.pushContext(
+      "Global",
+      null,
+      null,
+      0, // depth
+      injectedLex, // injected lexical env
+      injectedVar // injected var env
+    );
   }
 
   enterFunction(name) {

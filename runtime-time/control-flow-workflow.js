@@ -47,10 +47,6 @@ export class ControlFlowWorkflow {
     }
   }
 
-  // IMPORTANT — UC12:
-  // During execution phase:
-  //   - var: assignment only (do NOT re-declare)
-  //   - let/const: initialize (first write), reject TDZ
   handleVarDecl(node) {
     const envs = this.runtime.getCurrentEnvs();
 
@@ -75,6 +71,8 @@ export class ControlFlowWorkflow {
       if (target.environmentRecord[name] !== undefined) {
         // replace UNINITIALIZED with real value
         target.set(name, value);
+
+        // PHASE 4 — EXECUTE"
         this.runtime.renderSnapshot(`initialize ${name} = ${value} (${node.kind})`);
         continue;
       }
