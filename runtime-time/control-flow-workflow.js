@@ -85,7 +85,8 @@ initializeTDZ(name, value, target, kind) {
     throw new ReferenceError(`Cannot access '${name}' before initialization`);
   }
 
-  target.set(name, value);
+  target.environmentRecord[name] = { value, __const: true };
+
   this.runtime.renderSnapshot(`initialize ${name} = ${value} (${kind})`);
 }
 

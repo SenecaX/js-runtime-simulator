@@ -44,12 +44,18 @@ resolve(name, envs) {
     if (name in env.environmentRecord) {
       const value = env.environmentRecord[name];
 
-      if (value === UNINITIALIZED) {
-        throw new ReferenceError(`Cannot access '${name}' before initialization`);
+ // TDZ
+if (value === UNINITIALIZED || value?.value === UNINITIALIZED) {
+  throw new ReferenceError(`Cannot access '${name}' before initialization`);
+}
 
-      }
+// unwrap const/let wrapper
+if (value && typeof value === "object" && "value" in value) {
+  return value.value;
+}
 
-      return value;
+return value; // var or primitive
+
     }
     env = env.outer;
   }
@@ -72,32 +78,55 @@ resolve(name, envs) {
   throw new ReferenceError(`${name} is not defined`);
 }
 
-  update(name, value, envs) {
-    // 1. lexical chain
-    let env = envs.lexical;
-    while (env) {
-      if (name in env.environmentRecord) {
-        if (env.environmentRecord[name] === UNINITIALIZED) {
-         throw new ReferenceError(`Cannot access '${name}' before initialization`);
+update(name, value, envs) {
+  // 1. lexical chain
+  let env = envs.lexical;
+  while (env) {
+    if (name in env.environmentRecord) {
 
-        }
-        env.set(name, value);
-        return value;
+      const entry = env.environmentRecord[name];
+
+
+      // CONST REASSIGNMENT CHECK
+      if (entry && entry.__const === true) {
+        throw new TypeError("Assignment to constant variable.");
       }
-      env = env.outer;
+
+      // TDZ CHECK
+      if (entry === UNINITIALIZED || entry?.value === UNINITIALIZED) {
+        throw new ReferenceError(`Cannot access '${name}' before initialization`);
+      }
+
+      // SET
+      if (entry && entry.__const === true) {
+        throw new TypeError("Assignment to constant variable.");
+      }
+
+      // For const/let object-style record
+      if (entry && typeof entry === "object") {
+        entry.value = value;
+      } else {
+        env.set(name, value);
+      }
+
+      return value;
     }
 
-    // 2. var chain
-    env = envs.variable;
-    while (env) {
-      if (name in env.environmentRecord) {
-        env.set(name, value);
-        return value;
-      }
-      env = env.outer;
-    }
-
-    // 3. not found
-    throw new ReferenceError(`${name} is not defined`);
+    env = env.outer;
   }
+
+  // 2. var chain
+  env = envs.variable;
+  while (env) {
+    if (name in env.environmentRecord) {
+      env.set(name, value);
+      return value;
+    }
+    env = env.outer;
+  }
+
+  // 3. not found
+  throw new ReferenceError(`${name} is not defined`);
+}
+
 }
