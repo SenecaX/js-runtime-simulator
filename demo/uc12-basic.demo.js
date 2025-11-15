@@ -13,5 +13,5 @@ function demo(code) {
 
 // ⬇️ PUT ANY TEST SNIPPET HERE
 demo(`
-const x = 1; x = 2;
+      let x = 2;
 `);

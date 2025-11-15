@@ -66,6 +66,15 @@ export class TerminalRenderer {
   // ───────────────────────────────────────
   // Helpers
   // ───────────────────────────────────────
+
+  static _unwrap(v) {
+    // unwrap const/let record: { value, __const }
+    if (v && typeof v === "object" && "value" in v) {
+      return v.value;
+    }
+    return v;
+  }
+
   static _formatEnvEntries(record) {
     const entries = Object.entries(record);
     if (entries.length === 0) return "{}";
@@ -74,10 +83,15 @@ export class TerminalRenderer {
       "{ " +
       entries
         .map(([k, v]) => {
+          // functions
           if (v?.type === "FunctionObject") {
             return `${k}: [FunctionObject ${v.name}]`;
           }
-          return `${k}: ${JSON.stringify(v)}`;
+
+          // unwrap const/let for printing
+          const unwrapped = this._unwrap(v);
+
+          return `${k}: ${JSON.stringify(unwrapped)}`;
         })
         .join(", ") +
       " }"
