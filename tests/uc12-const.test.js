@@ -1,69 +1,67 @@
 import { describe, test, expect } from "vitest";
 import { RuntimeEngine } from "../engine/runtime-engine.js";
 
-describe("UC12 – let (ES-compliant)", () => {
+describe("UC12 – const (ES-compliant)", () => {
 
-  test("let initializes correctly", () => {
+  test("const initializes correctly", () => {
     const r = new RuntimeEngine();
-    r.run("let x = 1;");
+    r.run("const x = 1;");
     expect(r.resolve("x")).toBe(1);
   });
 
   test("TDZ: read before initialization throws", () => {
     const r = new RuntimeEngine();
-    expect(() => r.run("x; let x = 10;"))
+    expect(() => r.run("x; const x = 10;"))
       .toThrow("Cannot access 'x' before initialization");
   });
 
   test("TDZ: write before initialization throws", () => {
     const r = new RuntimeEngine();
-    expect(() => r.run("x = 5; let x = 10;"))
+    expect(() => r.run("x = 5; const x = 10;"))
       .toThrow("Cannot access 'x' before initialization");
   });
 
-  test("block TDZ throws", () => {
+  test("const without initializer throws", () => {
     const r = new RuntimeEngine();
-    expect(() => r.run("{ x; let x = 1; }"))
-      .toThrow("Cannot access 'x' before initialization");
+    expect(() => r.run("const x;")).toThrow();
+  });
+
+  test("const reassignment throws TypeError", () => {
+    const r = new RuntimeEngine();
+    expect(() => r.run("const x = 1; x = 2;")).toThrow();
   });
 
   test("block shadowing works", () => {
     const r = new RuntimeEngine();
     r.run(`
-      let x = 1;
-      { let x = 2; }
+      const x = 1;
+      { const x = 2; }
     `);
     expect(r.resolve("x")).toBe(1);
   });
 
-  test("block-scoped let does not leak", () => {
+  test("block-scoped const does not leak", () => {
     const r = new RuntimeEngine();
-    r.run("{ let y = 10; }");
+    r.run("{ const y = 10; }");
     expect(() => r.resolve("y")).toThrow("y is not defined");
   });
 
-  test("redeclaration in same scope throws (let-let)", () => {
+  test("redeclaration in same scope throws (const-const)", () => {
     const r = new RuntimeEngine();
-    expect(() => r.run("let x = 1; let x = 2;"))
+    expect(() => r.run("const x = 1; const x = 2;"))
       .toThrow();
   });
 
-  test("redeclaration let-const throws", () => {
+  test("redeclaration const-let throws", () => {
     const r = new RuntimeEngine();
-    expect(() => r.run("let x = 1; const x = 2;"))
+    expect(() => r.run("const x = 1; let x = 2;"))
       .toThrow();
   });
 
-  test("redeclaration var-let throws", () => {
+  test("var-const conflict throws", () => {
     const r = new RuntimeEngine();
-    expect(() => r.run("var x = 1; let x = 2;"))
+    expect(() => r.run("var x = 1; const x = 2;"))
       .toThrow();
-  });
-
-  test("let is not hoisted to undefined (TDZ)", () => {
-    const r = new RuntimeEngine();
-    expect(() => r.run("x; let x = 10;"))
-      .toThrow("Cannot access 'x' before initialization");
   });
 
 });

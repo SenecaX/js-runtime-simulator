@@ -178,7 +178,8 @@ resolveIdentifier(name) {
 if (name in lexical.environmentRecord) {
   const v = lexical.environmentRecord[name];
   if (v === UNINITIALIZED) {
-    throw new ReferenceError(`${name} is not initialized`);
+    throw new ReferenceError(`Cannot access '${name}' before initialization`);
+
   }
   return v;
 }

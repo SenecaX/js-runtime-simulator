@@ -45,7 +45,8 @@ resolve(name, envs) {
       const value = env.environmentRecord[name];
 
       if (value === UNINITIALIZED) {
-        throw new ReferenceError(`${name} is not initialized`);
+        throw new ReferenceError(`Cannot access '${name}' before initialization`);
+
       }
 
       return value;
@@ -77,9 +78,8 @@ resolve(name, envs) {
     while (env) {
       if (name in env.environmentRecord) {
         if (env.environmentRecord[name] === UNINITIALIZED) {
-          throw new ReferenceError(
-            `${name} is assigned before initialization (TDZ)`
-          );
+         throw new ReferenceError(`Cannot access '${name}' before initialization`);
+
         }
         env.set(name, value);
         return value;

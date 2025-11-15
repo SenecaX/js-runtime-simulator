@@ -1,5 +1,6 @@
 import { ExpressionEvaluator } from "../runtime-time/expression-evaluator.js";
 import { FunctionObject } from "./function-object.js";
+import { UNINITIALIZED } from "../runtime-time/variable-resolution-workflow.js";
 
 export class ControlFlowWorkflow {
   constructor(runtime) {
@@ -47,39 +48,54 @@ export class ControlFlowWorkflow {
     }
   }
 
-  handleVarDecl(node) {
-    const envs = this.runtime.getCurrentEnvs();
+handleVarDecl(node) {
+  const envs = this.runtime.getCurrentEnvs();
 
-    for (const decl of node.declarations) {
-      const name = decl.id.name;
+  for (const decl of node.declarations) {
+    const name = decl.id.name;
 
-      // No initializer → nothing to execute
-      if (!decl.init) continue;
+    if (!decl.init) {
+      if (node.kind === "const") throw new TypeError("Missing initializer in const declaration");
+      continue;
+    }
 
-      const value = this.evaluator.evaluate(decl.init);
+    const value = this.evaluator.evaluate(decl.init);
 
-      // var: assignment to existing binding
-      if (node.kind === "var") {
-        this.runtime.variables.update(name, value, envs);
-        continue;
-      }
+    if (node.kind === "var") {
+      this.assignVar(name, value, envs);
+      continue;
+    }
 
-      // let/const: first write initializes TDZ binding
-      // This is the ES "InitializeBinding" step
-      const target = envs.lexical;
+    if (node.kind === "let") {
+      this.initializeTDZ(name, value, envs.lexical, "let");
+      continue;
+    }
 
-      if (target.environmentRecord[name] !== undefined) {
-        // replace UNINITIALIZED with real value
-        target.set(name, value);
-
-        // PHASE 4 — EXECUTE"
-        this.runtime.renderSnapshot(`initialize ${name} = ${value} (${node.kind})`);
-        continue;
-      }
-
-      // Should never reach here unless malformed AST
+    if (node.kind === "const") {
+      this.initializeTDZ(name, value, envs.lexical, "const");
+      continue;
     }
   }
+}
+
+
+initializeTDZ(name, value, target, kind) {
+  if (target.environmentRecord[name] !== UNINITIALIZED) {
+    if (kind === "const") throw new TypeError("Assignment to constant variable.");
+    throw new ReferenceError(`Cannot access '${name}' before initialization`);
+  }
+
+  target.set(name, value);
+  this.runtime.renderSnapshot(`initialize ${name} = ${value} (${kind})`);
+}
+
+
+assignVar(name, value, envs) {
+  envs.variable.set(name, value);
+  this.runtime.renderSnapshot(`assign ${name} = ${value} (var)`);
+}
+
+
 
   handleBlock(node) {
     this.runtime.pushBlockEnv();
