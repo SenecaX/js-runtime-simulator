@@ -99,49 +99,31 @@ assignVar(name, value, envs) {
 
 
 
-  handleBlock(node) {
-    this.runtime.pushBlockEnv();
+handleBlock(node) {
+  // Create new lexical env for the block
+  const parentLex = this.runtime.getCurrentEnvs().lexical;
+  const blockLex = new this.runtime.lexEnvConstructor(parentLex);
 
-      // block-level declaration instantiation
-  this.hoistBlockDeclarations(node);
+  // Swap in block lexical environment
+  const ctx = this.runtime.contexts.currentContext();
+  const previousLex = ctx.lexicalEnv;
+  ctx.lexicalEnv = blockLex;
 
-    for (const stmt of node.body) {
-      const result = this.dispatch(stmt);
+  // BlockDeclarationInstantiation
+  this.runtime.instantiator.instantiateBlock(node, blockLex);
 
-      if (result && result.type === "return") {
-        this.runtime.popBlockEnv();
-        return result;
-      }
-    }
+  // Execute block body
+  for (const stmt of node.body) {
+    const result = this.dispatch(stmt);
 
-    this.runtime.popBlockEnv();
-    console.log("AFTER BLOCK:", this.runtime.getCurrentEnvs().lexical.environmentRecord);
-  }
-
-  hoistBlockDeclarations(blockNode) {
-  const { lexical: currentLex } = this.runtime.getCurrentEnvs();
-
-  for (const stmt of blockNode.body) {
-    if (stmt.type === "FunctionDeclaration") {
-      const name = stmt.id.name;
-      const params = stmt.params.map(p => p.name);
-      const closure = currentLex; // block-level function closure
-
-      const fn = new FunctionObject(name, params, stmt.body, closure);
-      currentLex.define(name, fn);
-      console.log(`HOIST (block): ${name} (function)`);
-    }
-
-    if (stmt.type === "VariableDeclaration") {
-      if (stmt.kind === "var") continue; // var is NOT block-scoped
-
-      for (const decl of stmt.declarations) {
-        const name = decl.id.name;
-        currentLex.define(name, UNINITIALIZED);
-        console.log(`HOIST (block): ${name} (${stmt.kind})`);
-      }
+    if (result && result.type === "return") {
+      ctx.lexicalEnv = previousLex; // restore
+      return result;
     }
   }
+
+  // Restore parent environment after block
+  ctx.lexicalEnv = previousLex;
 }
 
 }

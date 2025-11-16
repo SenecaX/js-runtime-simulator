@@ -6,17 +6,18 @@ import { ControlFlowWorkflow } from "../runtime-time/control-flow-workflow.js";
 import { VariableResolutionWorkflow } from "../runtime-time/variable-resolution-workflow.js";
 import { TerminalRenderer as T } from "../ui/terminal-renderer.js";
 
-import { DeclarationInstantiationWorkflow } from "../instantiation/declaration-instantiation-workflow.js";
+import { InstantiationWorkflow } from "../instantiation/instantiation-workflow.js";
 
 export class RuntimeEngine {
   lastValue = undefined;
 
   constructor() {
+    this.lexEnvConstructor = LexicalEnvironment;
     this.contexts = new ContextLifecycleWorkflow();
     this.variables = new VariableResolutionWorkflow();
     this.controlFlow = new ControlFlowWorkflow(this);
 
-    this.instantiator = new DeclarationInstantiationWorkflow(this);
+    this.instantiator = new InstantiationWorkflow(this);
   }
 
   // ───────────────────────────────
@@ -64,7 +65,6 @@ export class RuntimeEngine {
   pushBlockEnv() {
     const ctx = this.contexts.currentContext();
     ctx.lexicalEnv = new LexicalEnvironment(ctx.lexicalEnv);
-
   }
 
   popBlockEnv() {
@@ -73,21 +73,17 @@ export class RuntimeEngine {
   }
 
   printLexChain(prefix = "") {
-  let env = this.contexts.currentContext().lexicalEnv;
-  let i = 0;
+    let env = this.contexts.currentContext().lexicalEnv;
+    let i = 0;
 
-  console.log(prefix + "LEXICAL CHAIN:");
-  while (env) {
-    console.log(
-      `  [${i}]`,
-      JSON.stringify(env.environmentRecord)
-    );
-    env = env.outer;
-    i++;
+    console.log(prefix + "LEXICAL CHAIN:");
+    while (env) {
+      console.log(`  [${i}]`, JSON.stringify(env.environmentRecord));
+      env = env.outer;
+      i++;
+    }
+    console.log("--------------");
   }
-  console.log("--------------");
-}
-
 
   // ───────────────────────────────
   // CallExpression / Function Execution
