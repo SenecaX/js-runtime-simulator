@@ -1,4 +1,4 @@
-import { Stack } from "../data/stack.js";
+import { Stack } from "../primitive/stack.js";
 import { ExecutionContext } from "./execution-context.js";
 
 export class CallStack {

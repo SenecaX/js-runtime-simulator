@@ -1,7 +1,7 @@
 // runtime-time/variable-resolution-workflow.js
-import { LexicalEnvironment } from "../runtime-space/lexical-environment.js";
-import { VariableEnvironment } from "../runtime-space/variable-environment.js";
-import { EnvironmentRouter } from "../runtime-time/environment-router.js";
+import { LexicalEnvironment } from "../space/lexical-environment.js";
+import { VariableEnvironment } from "../space/variable-environment.js";
+import { EnvironmentRouter } from "./environment-selector.js";
 
 export const UNINITIALIZED = Symbol("UNINITIALIZED");
 

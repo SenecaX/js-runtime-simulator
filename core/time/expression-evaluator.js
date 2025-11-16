@@ -1,5 +1,5 @@
 import { FunctionObject } from "./function-object.js";
-import { UNINITIALIZED } from "../runtime-time/variable-resolution-workflow.js";
+import { UNINITIALIZED } from "./variable-resolution.js";
 
 export class ExpressionEvaluator {
   constructor(runtime) {

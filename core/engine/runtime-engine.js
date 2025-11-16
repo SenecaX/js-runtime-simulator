@@ -1,31 +1,36 @@
-// engine/runtime-engine.js
+// core/engine/runtime-engine.js
 import * as acorn from "acorn";
-import { LexicalEnvironment } from "../runtime-space/lexical-environment.js";
-import { ContextLifecycleWorkflow } from "../runtime-time/context-lifecycle-workflow.js";
-import { ControlFlowWorkflow } from "../runtime-time/control-flow-workflow.js";
-import { VariableResolutionWorkflow } from "../runtime-time/variable-resolution-workflow.js";
-import { TerminalRenderer as T } from "../../ui/terminal-renderer.js";
+
+import { LexicalEnvironment } from "../space/lexical-environment.js";
+
+import { ContextLifecycleWorkflow } from "../time/context-lifecycle.js";
+import { ControlFlowWorkflow } from "../time/control-flow.js";
+import { VariableResolutionWorkflow } from "../time/variable-resolution.js";
 
 import { InstantiationWorkflow } from "../instantiation/instantiation-workflow.js";
+
+import { EngineRenderer } from "../ui/engine-renderer.js";
 
 export class RuntimeEngine {
   lastValue = undefined;
 
   constructor() {
+    // Core subsystems
     this.lexEnvConstructor = LexicalEnvironment;
     this.contexts = new ContextLifecycleWorkflow();
     this.variables = new VariableResolutionWorkflow();
     this.controlFlow = new ControlFlowWorkflow(this);
-
     this.instantiator = new InstantiationWorkflow(this);
+
+    // Presentation layer
+    this.renderer = new EngineRenderer(this);
   }
 
   // ───────────────────────────────
   // Lifecycle
   // ───────────────────────────────
-  // UC12 FIX — init does NOT create global context anymore
   init() {
-    // do nothing — global context is created by instantiation phase
+    // UC12 FIX — global context is created by instantiation
   }
 
   terminate() {
@@ -33,7 +38,7 @@ export class RuntimeEngine {
   }
 
   // ───────────────────────────────
-  // Environment Access
+  // Environment access
   // ───────────────────────────────
   getCurrentEnvs() {
     const ctx = this.contexts.currentContext();
@@ -46,12 +51,7 @@ export class RuntimeEngine {
   define(name, value, kind, envs) {
     this.variables.define(name, value, kind, envs);
 
-    const safe =
-      value && value.type === "FunctionObject"
-        ? `[FunctionObject ${value.name}]`
-        : JSON.stringify(value);
-
-    this.renderSnapshot(`define ${name} = ${safe} (${kind})`);
+    this.renderer.snapshotDefine(name, value, kind);
   }
 
   resolve(name) {
@@ -61,6 +61,7 @@ export class RuntimeEngine {
 
   // ───────────────────────────────
   // Block scoping
+  // (kept exactly — but routed through TIME layer later)
   // ───────────────────────────────
   pushBlockEnv() {
     const ctx = this.contexts.currentContext();
@@ -73,20 +74,11 @@ export class RuntimeEngine {
   }
 
   printLexChain(prefix = "") {
-    let env = this.contexts.currentContext().lexicalEnv;
-    let i = 0;
-
-    console.log(prefix + "LEXICAL CHAIN:");
-    while (env) {
-      console.log(`  [${i}]`, JSON.stringify(env.environmentRecord));
-      env = env.outer;
-      i++;
-    }
-    console.log("--------------");
+    this.renderer.printLexChain(prefix);
   }
 
   // ───────────────────────────────
-  // CallExpression / Function Execution
+  // Function calls
   // ───────────────────────────────
   callFunction(fn, args) {
     if (!fn || fn.type !== "FunctionObject") {
@@ -99,24 +91,21 @@ export class RuntimeEngine {
       );
     }
 
-    // Create new execution context using function closure
+    // Create new context
     const ctx = this.contexts.callStack.pushContext(
       fn.name,
-      fn.closure, // correct lexical parent
+      fn.closure,
       this.variables.globalVariable
     );
 
-    this.renderSnapshot(`call ${fn.name}(${args.join(", ")})`);
+    this.renderer.snapshotCall(fn, args);
 
-    // DO NOT overwrite ctx.lexicalEnv / ctx.variableEnv
-    // Instead: reuse what ExecutionContext already created
-
-    // Bind parameters into lexical environment
+    // Bind parameters
     fn.params.forEach((param, i) => {
       ctx.lexicalEnv.define(param, args[i]);
     });
 
-    // Execute body
+    // Execute function body
     const completion = this.controlFlow.execute(fn.body.body);
 
     // Pop context
@@ -126,65 +115,25 @@ export class RuntimeEngine {
   }
 
   // ───────────────────────────────
-  // Execution
+  // Execution pipeline
   // ───────────────────────────────
   run(code) {
-    this.renderPhase("PHASE 1 — PARSE");
+    this.renderer.phase("PHASE 1 — PARSE");
     const ast = acorn.parse(code, { ecmaVersion: "latest" });
-    this.renderParsedAST(ast);
+    this.renderer.parsedAST(ast);
 
-    this.renderPhase("PHASE 2 — INSTANTIATE");
+    this.renderer.phase("PHASE 2 — INSTANTIATE");
     const { globalLex, globalVar } = this.instantiator.instantiateGlobal(ast);
+    this.renderer.globalInstantiationState(globalLex, globalVar); 
 
-    this.renderPhase("PHASE 3 — CONTEXT CREATE");
+    this.renderer.phase("PHASE 3 — CONTEXT CREATE");
     this.contexts.initializeGlobalContext(globalLex, globalVar);
-    this.renderGlobalContextState(globalLex, globalVar);
+    this.renderer.globalContextState(globalLex, globalVar);
 
-    this.renderPhase("PHASE 4 — EXECUTE");
+    this.renderer.phase("PHASE 4 — EXECUTE");
     const completion = this.controlFlow.execute(ast.body);
 
-    this.renderPhase("PHASE 5 — COMPLETE");
+    this.renderer.phase("PHASE 5 — COMPLETE");
     return completion ? completion.value : this.lastValue;
-  }
-
-  // ───────────────────────────────
-  // Snapshot renderer
-  // ───────────────────────────────
-  renderSnapshot(action) {
-    const ctx = this.contexts.currentContext();
-    const envs = this.getCurrentEnvs();
-    const frames = this.contexts.callStack.printStack();
-
-    console.log(`ACTION: ${action}`);
-    console.log("-".repeat(40));
-
-    console.log(
-      T.block("CALL STACK (execution contexts)", T.formatCallStack(frames))
-    );
-
-    console.log(
-      T.block("LEXICAL SCOPE CHAIN", T.formatLexicalChain(envs.lexical))
-    );
-
-    console.log(
-      T.block("VARIABLE SCOPE CHAIN", T.formatVariableChain(envs.variable))
-    );
-
-    console.log("-".repeat(40));
-  }
-
-  renderPhase(phaseName) {
-    console.log(`\n──────── ${phaseName} ────────`);
-  }
-
-  renderParsedAST(ast) {
-    console.log("AST (Program.body):", ast.body);
-  }
-
-  renderGlobalContextState(globalLex, globalVar) {
-    console.log("CALL STACK:", this.contexts.callStack.printStack());
-    console.log("GLOBAL LEXICAL:", globalLex.environmentRecord);
-    console.log("GLOBAL VARIABLE:", globalVar.environmentRecord);
-    console.log("----------------------------------------");
   }
 }

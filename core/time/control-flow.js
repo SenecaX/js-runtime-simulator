@@ -1,6 +1,5 @@
-import { ExpressionEvaluator } from "../runtime-time/expression-evaluator.js";
-import { FunctionObject } from "./function-object.js";
-import { UNINITIALIZED } from "../runtime-time/variable-resolution-workflow.js";
+import { ExpressionEvaluator } from "./expression-evaluator.js";
+import { UNINITIALIZED } from "./variable-resolution.js";
 
 export class ControlFlowWorkflow {
   constructor(runtime) {
@@ -20,7 +19,6 @@ export class ControlFlowWorkflow {
   }
 
   dispatch(node) {
-    // IMPORTANT — UC12:
     // FunctionDeclaration is *ignored* during execution.
     if (node.type === "FunctionDeclaration") {
       return; // Already hoisted + initialized in instantiation phase
@@ -88,13 +86,13 @@ initializeTDZ(name, value, target, kind) {
 
   target.environmentRecord[name] = { value, __const: true };
 
-  this.runtime.renderSnapshot(`initialize ${name} = ${value} (${kind})`);
+  this.runtime.renderer.snapshot(`initialize ${name} = ${value} (${kind})`);
 }
 
 
 assignVar(name, value, envs) {
   envs.variable.set(name, value);
-  this.runtime.renderSnapshot(`assign ${name} = ${value} (var)`);
+  this.runtime.renderer.snapshot(`assign ${name} = ${value} (var)`);
 }
 
 

@@ -1,4 +1,4 @@
-import { RuntimeEngine } from "../engine/runtime-engine.js";
+import { RuntimeEngine } from "../core/engine/runtime-engine.js";
 
 function demo(code) {
   const r = new RuntimeEngine();
@@ -13,5 +13,6 @@ function demo(code) {
 
 // ⬇️ PUT ANY TEST SNIPPET HERE
 demo(`
-x; let x = 10;
+let a = 1;
+const b = 2;
 `);

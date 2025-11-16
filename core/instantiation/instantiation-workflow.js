@@ -1,8 +1,7 @@
-// instantiation/instantiation-workflow.js
-import { UNINITIALIZED } from "../runtime-time/variable-resolution-workflow.js";
-import { FunctionObject } from "../runtime-time/function-object.js";
-import { LexicalEnvironment } from "../runtime-space/lexical-environment.js";
-import { VariableEnvironment } from "../runtime-space/variable-environment.js";
+import { UNINITIALIZED } from "../time/variable-resolution.js";
+import { FunctionObject } from "../time/function-object.js";
+import { LexicalEnvironment } from "../space/lexical-environment.js";
+import { VariableEnvironment } from "../space/variable-environment.js";
 
 export class InstantiationWorkflow {
   constructor(runtime) {
