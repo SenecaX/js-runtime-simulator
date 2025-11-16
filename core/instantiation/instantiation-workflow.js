@@ -11,60 +11,73 @@ export class InstantiationWorkflow {
   // ========================================================
   // GLOBAL DECLARATION INSTANTIATION
   // ========================================================
-  instantiateGlobal(ast) {
-    const globalLex = new LexicalEnvironment(null);
-    const globalVar = new VariableEnvironment(null);
+instantiateGlobal(ast) {
+  const globalLex = new LexicalEnvironment(null);
+  const globalVar = new VariableEnvironment(null);
 
-    // expose to runtime
-    this.runtime.variables.globalLexical = globalLex;
-    this.runtime.variables.globalVariable = globalVar;
+  // expose to runtime
+  this.runtime.variables.globalLexical = globalLex;
+  this.runtime.variables.globalVariable = globalVar;
 
-    // collect
-    const fns = [];
-    const vars = [];
-    const lets = [];
-    const consts = [];
+  // collect
+  const fns = [];
+  const vars = [];
+  const lets = [];
+  const consts = [];
 
-    for (const node of ast.body) {
-      if (node.type === "FunctionDeclaration") {
-        fns.push(node);
-        continue;
-      }
+  function collect(node) {
+    if (!node || typeof node !== "object") return;
 
-      if (node.type === "VariableDeclaration") {
-        for (const decl of node.declarations) {
-          const name = decl.id.name;
-          if (node.kind === "var") vars.push(name);
-          if (node.kind === "let") lets.push(name);
-          if (node.kind === "const") consts.push(name);
-        }
+    // var / let / const
+    if (node.type === "VariableDeclaration") {
+      for (const decl of node.declarations) {
+        const name = decl.id.name;
+        if (node.kind === "var") vars.push(name);
+        if (node.kind === "let") lets.push(name);
+        if (node.kind === "const") consts.push(name);
       }
     }
 
-    // function hoisting
-    for (const node of fns) {
-      const name = node.id.name;
-      const params = node.params.map(p => p.name);
-      const fn = new FunctionObject(name, params, node.body, globalLex);
-      globalLex.define(name, fn);
+    // function declarations
+    if (node.type === "FunctionDeclaration") {
+      fns.push(node);
     }
 
-    // var hoisting
-    for (const name of vars) {
-      globalVar.define(name, undefined);
+    // recurse into child nodes
+    for (const key in node) {
+      const value = node[key];
+      if (Array.isArray(value)) value.forEach(collect);
+      else if (value && typeof value === "object") collect(value);
     }
-
-    // let/const → UNINITIALIZED
-    for (const name of lets) {
-      globalLex.define(name, UNINITIALIZED);
-    }
-
-    for (const name of consts) {
-      globalLex.define(name, UNINITIALIZED);
-    }
-
-    return { globalLex, globalVar };
   }
+
+  // start recursive walk
+  collect(ast);
+
+  // function hoisting
+  for (const node of fns) {
+    const name = node.id.name;
+    const params = node.params.map(p => p.name);
+    const fn = new FunctionObject(name, params, node.body, globalLex);
+    globalLex.define(name, fn);
+  }
+
+  // var hoisting
+  for (const name of vars) {
+    globalVar.define(name, undefined);
+  }
+
+  // let/const → UNINITIALIZED
+  for (const name of lets) {
+    globalLex.define(name, UNINITIALIZED);
+  }
+
+  for (const name of consts) {
+    globalLex.define(name, UNINITIALIZED);
+  }
+
+  return { globalLex, globalVar };
+}
 
   // ========================================================
   // FUNCTION DECLARATION INSTANTIATION

@@ -13,8 +13,16 @@ export class ExpressionEvaluator {
       case "Literal":
         return expr.value;
 
-      case "Identifier":
-          return this.resolveIdentifier(expr.name);
+case "Identifier": {
+  const binding = this.resolveIdentifier(expr.name);
+
+  // unwrap let/const binding { value, __const }
+  if (binding && typeof binding === "object" && "value" in binding) {
+    return binding.value;
+  }
+
+  return binding;
+}
 
 
       case "BinaryExpression":

@@ -3,30 +3,28 @@
 # Gathers key files involved in the observation capture fix
 OUTPUT="./observation_fix_bundle.txt" 
 FILES=(
-./engine/runtime-engine.js
-./core/stack.js
+  ./core/engine/runtime-engine.js
 
-./ui/terminal-renderer.js
+  ./core/primitive/stack.js
 
-./runtime-time/environment-router.js
-./runtime-time/expression-evaluator.js
-./runtime-time/function-object.js
-./runtime-time/context-lifecycle-workflow.js
-./runtime-time/control-flow-workflow.js
-./runtime-time/variable-resolution-workflow.js
+  ./core/ui/engine-renderer.js
+  ./core/ui/terminal-renderer.js
 
-./runtime-space/variable-environment.js
-./runtime-space/lexical-environment.js
-./runtime-space/scope-chain.js
-./runtime-space/execution-context.js
-./runtime-space/call-stack.js
+  ./core/time/environment-selector.js
+  ./core/time/expression-evaluator.js
+  ./core/time/function-object.js
+  ./core/time/context-lifecycle.js
+  ./core/time/control-flow.js
+  ./core/time/variable-resolution.js
 
-./instantiation/block-instantiator.js
-./instantiation/declaration-instantiation-workflow.js
-./instantiation/function-instantiator.js
-./instantiation/global-instantiator.js
+  ./core/space/variable-environment.js
+  ./core/space/lexical-environment.js
+  ./core/space/scope-chain.js
+  ./core/space/execution-context.js
+  ./core/space/call-stack.js
+
+  ./core/instantiation/instantiation-workflow.js
 )
-
 
 # Clear output
 > "$OUTPUT"

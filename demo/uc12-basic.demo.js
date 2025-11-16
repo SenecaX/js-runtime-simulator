@@ -13,6 +13,8 @@ function demo(code) {
 
 // ⬇️ PUT ANY TEST SNIPPET HERE
 demo(`
-let a = 1;
-const b = 2;
+    {
+      var q = 5;
+    }
+    q; 
 `);
