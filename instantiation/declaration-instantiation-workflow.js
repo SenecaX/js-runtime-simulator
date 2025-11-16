@@ -11,7 +11,6 @@ export class DeclarationInstantiationWorkflow {
 
   instantiateGlobal(ast) {
     // 1 — fresh global environments
-
     const globalLex = new LexicalEnvironment(null);
     const globalVar = new VariableEnvironment(null);
 
@@ -72,7 +71,7 @@ export class DeclarationInstantiationWorkflow {
           break;
 
         case "BlockStatement":
-          this._scanRoot(node.body, fns, vars, lets, consts);
+          // this._scanRoot(node.body, fns, vars, lets, consts);
           break;
       }
     }

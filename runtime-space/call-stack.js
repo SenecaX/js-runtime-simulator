@@ -44,7 +44,7 @@ export class CallStack {
     }
 
     // ────────────────────────────────────────────────
-    // 2. Global execution context (UC12 injectedLex/injectedVar)
+    // 2. Global execution context
     // ────────────────────────────────────────────────
     if (injectedLex !== null || injectedVar !== null) {
       const ctx = new ExecutionContext(

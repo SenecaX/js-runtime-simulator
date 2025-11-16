@@ -64,12 +64,30 @@ export class RuntimeEngine {
   pushBlockEnv() {
     const ctx = this.contexts.currentContext();
     ctx.lexicalEnv = new LexicalEnvironment(ctx.lexicalEnv);
+
   }
 
   popBlockEnv() {
     const ctx = this.contexts.currentContext();
     ctx.lexicalEnv = ctx.lexicalEnv.outer;
   }
+
+  printLexChain(prefix = "") {
+  let env = this.contexts.currentContext().lexicalEnv;
+  let i = 0;
+
+  console.log(prefix + "LEXICAL CHAIN:");
+  while (env) {
+    console.log(
+      `  [${i}]`,
+      JSON.stringify(env.environmentRecord)
+    );
+    env = env.outer;
+    i++;
+  }
+  console.log("--------------");
+}
+
 
   // ───────────────────────────────
   // CallExpression / Function Execution

@@ -13,5 +13,5 @@ function demo(code) {
 
 // ⬇️ PUT ANY TEST SNIPPET HERE
 demo(`
-      let x = 2;
+x; let x = 10;
 `);

@@ -10,6 +10,7 @@ export class ControlFlowWorkflow {
 
   execute(body) {
     for (const node of body) {
+
       const result = this.dispatch(node);
 
       if (result && result.type === "return") {
@@ -101,6 +102,9 @@ assignVar(name, value, envs) {
   handleBlock(node) {
     this.runtime.pushBlockEnv();
 
+      // block-level declaration instantiation
+  this.hoistBlockDeclarations(node);
+
     for (const stmt of node.body) {
       const result = this.dispatch(stmt);
 
@@ -111,5 +115,33 @@ assignVar(name, value, envs) {
     }
 
     this.runtime.popBlockEnv();
+    console.log("AFTER BLOCK:", this.runtime.getCurrentEnvs().lexical.environmentRecord);
   }
+
+  hoistBlockDeclarations(blockNode) {
+  const { lexical: currentLex } = this.runtime.getCurrentEnvs();
+
+  for (const stmt of blockNode.body) {
+    if (stmt.type === "FunctionDeclaration") {
+      const name = stmt.id.name;
+      const params = stmt.params.map(p => p.name);
+      const closure = currentLex; // block-level function closure
+
+      const fn = new FunctionObject(name, params, stmt.body, closure);
+      currentLex.define(name, fn);
+      console.log(`HOIST (block): ${name} (function)`);
+    }
+
+    if (stmt.type === "VariableDeclaration") {
+      if (stmt.kind === "var") continue; // var is NOT block-scoped
+
+      for (const decl of stmt.declarations) {
+        const name = decl.id.name;
+        currentLex.define(name, UNINITIALIZED);
+        console.log(`HOIST (block): ${name} (${stmt.kind})`);
+      }
+    }
+  }
+}
+
 }
