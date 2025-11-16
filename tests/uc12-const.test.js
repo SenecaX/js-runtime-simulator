@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { RuntimeEngine } from "../engine/runtime-engine.js";
+import { RuntimeEngine } from "../core/engine/runtime-engine.js";
 
 describe("UC12 – const (ES-compliant)", () => {
 

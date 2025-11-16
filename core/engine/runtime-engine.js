@@ -4,7 +4,7 @@ import { LexicalEnvironment } from "../runtime-space/lexical-environment.js";
 import { ContextLifecycleWorkflow } from "../runtime-time/context-lifecycle-workflow.js";
 import { ControlFlowWorkflow } from "../runtime-time/control-flow-workflow.js";
 import { VariableResolutionWorkflow } from "../runtime-time/variable-resolution-workflow.js";
-import { TerminalRenderer as T } from "../ui/terminal-renderer.js";
+import { TerminalRenderer as T } from "../../ui/terminal-renderer.js";
 
 import { InstantiationWorkflow } from "../instantiation/instantiation-workflow.js";
 
