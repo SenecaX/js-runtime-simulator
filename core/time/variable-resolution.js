@@ -36,9 +36,7 @@ define(name, value, kind, envs) {
 }
 
 resolve(name, envs) {
-  //
   // 1. lexical chain first (let, const, function)
-  //
   let env = envs.lexical;
   while (env) {
     if (name in env.environmentRecord) {
@@ -60,9 +58,7 @@ return value; // var or primitive
     env = env.outer;
   }
 
-  //
   // 2. variable chain (var + function hoisting)
-  //
   env = envs.variable;
   while (env) {
     if (name in env.environmentRecord) {
@@ -72,9 +68,7 @@ return value; // var or primitive
     env = env.outer;
   }
 
-  //
   // 3. not found
-  //
   throw new ReferenceError(`${name} is not defined`);
 }
 

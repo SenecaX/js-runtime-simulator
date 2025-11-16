@@ -6,13 +6,6 @@ export class CallStack {
     this.stack = new Stack();
   }
 
-  /**
-   * Correct UC12 signature:
-   * pushContext(name, closureLex, closureVar, depth, injectedLex, injectedVar)
-   *
-   * All arguments MUST be aligned because ExecutionContext expects:
-   *   (name, outerLex, outerVar, depth, injectedLex, injectedVar)
-   */
   pushContext(
     name,
     closureLex = null,
