@@ -1,4 +1,4 @@
-import { Stack } from "../core/stack.js";
+import { Stack } from "../primitive/stack.js";
 import { ExecutionContext } from "./execution-context.js";
 
 export class CallStack {
@@ -6,13 +6,6 @@ export class CallStack {
     this.stack = new Stack();
   }
 
-  /**
-   * Correct UC12 signature:
-   * pushContext(name, closureLex, closureVar, depth, injectedLex, injectedVar)
-   *
-   * All arguments MUST be aligned because ExecutionContext expects:
-   *   (name, outerLex, outerVar, depth, injectedLex, injectedVar)
-   */
   pushContext(
     name,
     closureLex = null,
@@ -44,7 +37,7 @@ export class CallStack {
     }
 
     // ────────────────────────────────────────────────
-    // 2. Global execution context (UC12 injectedLex/injectedVar)
+    // 2. Global execution context
     // ────────────────────────────────────────────────
     if (injectedLex !== null || injectedVar !== null) {
       const ctx = new ExecutionContext(

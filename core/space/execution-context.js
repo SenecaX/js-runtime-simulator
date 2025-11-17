@@ -1,6 +1,6 @@
 // runtime-space/execution-context.js
-import { LexicalEnvironment } from "../runtime-space/lexical-environment.js";
-import { VariableEnvironment } from "../runtime-space/variable-environment.js";
+import { LexicalEnvironment } from "./lexical-environment.js";
+import { VariableEnvironment } from "./variable-environment.js";
 
 export class ExecutionContext {
   constructor(

@@ -1,5 +1,5 @@
 import { FunctionObject } from "./function-object.js";
-import { UNINITIALIZED } from "../runtime-time/variable-resolution-workflow.js";
+import { UNINITIALIZED } from "./variable-resolution.js";
 
 export class ExpressionEvaluator {
   constructor(runtime) {
@@ -13,8 +13,16 @@ export class ExpressionEvaluator {
       case "Literal":
         return expr.value;
 
-      case "Identifier":
-          return this.resolveIdentifier(expr.name);
+case "Identifier": {
+  const binding = this.resolveIdentifier(expr.name);
+
+  // unwrap let/const binding { value, __const }
+  if (binding && typeof binding === "object" && "value" in binding) {
+    return binding.value;
+  }
+
+  return binding;
+}
 
 
       case "BinaryExpression":
@@ -178,7 +186,8 @@ resolveIdentifier(name) {
 if (name in lexical.environmentRecord) {
   const v = lexical.environmentRecord[name];
   if (v === UNINITIALIZED) {
-    throw new ReferenceError(`${name} is not initialized`);
+    throw new ReferenceError(`Cannot access '${name}' before initialization`);
+
   }
   return v;
 }

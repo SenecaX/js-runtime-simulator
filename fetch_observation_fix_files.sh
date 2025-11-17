@@ -3,10 +3,28 @@
 # Gathers key files involved in the observation capture fix
 OUTPUT="./observation_fix_bundle.txt" 
 FILES=(
-./ui/terminal-renderer.js
-./engine/runtime-engine.js
-)
+  ./core/engine/runtime-engine.js
 
+  ./core/primitive/stack.js
+
+  ./core/ui/engine-renderer.js
+  ./core/ui/terminal-renderer.js
+
+  ./core/time/environment-selector.js
+  ./core/time/expression-evaluator.js
+  ./core/time/function-object.js
+  ./core/time/context-lifecycle.js
+  ./core/time/control-flow.js
+  ./core/time/variable-resolution.js
+
+  ./core/space/variable-environment.js
+  ./core/space/lexical-environment.js
+  ./core/space/scope-chain.js
+  ./core/space/execution-context.js
+  ./core/space/call-stack.js
+
+  ./core/instantiation/instantiation-workflow.js
+)
 
 # Clear output
 > "$OUTPUT"
