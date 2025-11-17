@@ -136,4 +136,16 @@ export class RuntimeEngine {
     this.renderer.phase("PHASE 5 — COMPLETE");
     return completion ? completion.value : this.lastValue;
   }
+
+  instantiateBlock(node, blockLex) {
+  this.instantiator.instantiateBlock(node, blockLex);
+}
+
+prepareBlock(node, parentLex) {
+  const blockLex = new LexicalEnvironment(parentLex);
+  this.instantiator.instantiateBlock(node, blockLex);
+  return blockLex;
+}
+
+
 }

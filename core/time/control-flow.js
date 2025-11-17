@@ -105,7 +105,7 @@ export class ControlFlowWorkflow {
     ctx.lexicalEnv = blockLex;
 
     // BlockDeclarationInstantiation
-    this.runtime.instantiator.instantiateBlock(node, blockLex);
+    this.runtime.instantiateBlock(node, blockLex);
 
     // Execute block body
     for (const stmt of node.body) {

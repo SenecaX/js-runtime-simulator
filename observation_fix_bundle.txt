@@ -416,8 +416,16 @@ export class ExpressionEvaluator {
       case "Literal":
         return expr.value;
 
-      case "Identifier":
-          return this.resolveIdentifier(expr.name);
+case "Identifier": {
+  const binding = this.resolveIdentifier(expr.name);
+
+  // unwrap let/const binding { value, __const }
+  if (binding && typeof binding === "object" && "value" in binding) {
+    return binding.value;
+  }
+
+  return binding;
+}
 
 
       case "BinaryExpression":
@@ -1162,7 +1170,7 @@ export class InstantiationWorkflow {
   }
 
   // ========================================================
-  // GLOBAL DECLARATION INSTANTIATION
+  // GLOBAL DECLARATION INSTANTIATION  (UC12 + UC13 COMPLIANT)
   // ========================================================
   instantiateGlobal(ast) {
     const globalLex = new LexicalEnvironment(null);
@@ -1172,12 +1180,15 @@ export class InstantiationWorkflow {
     this.runtime.variables.globalLexical = globalLex;
     this.runtime.variables.globalVariable = globalVar;
 
-    // collect
+    // Collect declarations
     const fns = [];
     const vars = [];
     const lets = [];
     const consts = [];
 
+    // ========================================================
+    // TOP-LEVEL SCAN (ONLY top level can declare global let/const)
+    // ========================================================
     for (const node of ast.body) {
       if (node.type === "FunctionDeclaration") {
         fns.push(node);
@@ -1187,6 +1198,7 @@ export class InstantiationWorkflow {
       if (node.type === "VariableDeclaration") {
         for (const decl of node.declarations) {
           const name = decl.id.name;
+
           if (node.kind === "var") vars.push(name);
           if (node.kind === "let") lets.push(name);
           if (node.kind === "const") consts.push(name);
@@ -1194,7 +1206,36 @@ export class InstantiationWorkflow {
       }
     }
 
-    // function hoisting
+    // ========================================================
+    // RECURSIVE WALK FOR var + function only (UC13)
+    // (let/const inside blocks/functions are NOT global)
+    // ========================================================
+    function collect(node) {
+      if (!node || typeof node !== "object") return;
+
+      if (node.type === "VariableDeclaration") {
+        for (const decl of node.declarations) {
+          const name = decl.id.name;
+          if (node.kind === "var") vars.push(name);  // var only
+        }
+      }
+
+      if (node.type === "FunctionDeclaration") {
+        fns.push(node);
+      }
+
+      for (const key in node) {
+        const value = node[key];
+        if (Array.isArray(value)) value.forEach(collect);
+        else if (value && typeof value === "object") collect(value);
+      }
+    }
+
+    collect(ast);
+
+    // ========================================================
+    // HOIST FUNCTION DECLARATIONS (global lexical)
+    // ========================================================
     for (const node of fns) {
       const name = node.id.name;
       const params = node.params.map(p => p.name);
@@ -1202,12 +1243,16 @@ export class InstantiationWorkflow {
       globalLex.define(name, fn);
     }
 
-    // var hoisting
+    // ========================================================
+    // HOIST VAR DECLARATIONS (global variable env)
+    // ========================================================
     for (const name of vars) {
       globalVar.define(name, undefined);
     }
 
-    // let/const → UNINITIALIZED
+    // ========================================================
+    // HOIST TOP-LEVEL LET/CONST (TDZ)
+    // ========================================================
     for (const name of lets) {
       globalLex.define(name, UNINITIALIZED);
     }
@@ -1223,7 +1268,7 @@ export class InstantiationWorkflow {
   // FUNCTION DECLARATION INSTANTIATION
   // ========================================================
   instantiateFunction(fnNode, lexicalEnv, varEnv, args) {
-    // 1. bind params
+    // 1. bind params to lexical environment
     fnNode.params.forEach((param, index) => {
       lexicalEnv.define(param.name, args[index]);
     });
