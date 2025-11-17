@@ -140,6 +140,18 @@ export class RuntimeEngine {
     this.renderer.phase("PHASE 5 — COMPLETE");
     return completion ? completion.value : this.lastValue;
   }
+
+  instantiateBlock(node, blockLex) {
+  this.instantiator.instantiateBlock(node, blockLex);
+}
+
+prepareBlock(node, parentLex) {
+  const blockLex = new LexicalEnvironment(parentLex);
+  this.instantiator.instantiateBlock(node, blockLex);
+  return blockLex;
+}
+
+
 }
 
 
@@ -778,7 +790,7 @@ export class ControlFlowWorkflow {
     ctx.lexicalEnv = blockLex;
 
     // BlockDeclarationInstantiation
-    this.runtime.instantiator.instantiateBlock(node, blockLex);
+    this.runtime.instantiateBlock(node, blockLex);
 
     // Execute block body
     for (const stmt of node.body) {

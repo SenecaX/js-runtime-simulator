@@ -8,9 +8,6 @@ export class InstantiationWorkflow {
     this.runtime = runtime;
   }
 
-  // ========================================================
-  // GLOBAL DECLARATION INSTANTIATION  (UC12 + UC13 COMPLIANT)
-  // ========================================================
   instantiateGlobal(ast) {
     const globalLex = new LexicalEnvironment(null);
     const globalVar = new VariableEnvironment(null);
@@ -19,15 +16,11 @@ export class InstantiationWorkflow {
     this.runtime.variables.globalLexical = globalLex;
     this.runtime.variables.globalVariable = globalVar;
 
-    // Collect declarations
     const fns = [];
     const vars = [];
     const lets = [];
     const consts = [];
 
-    // ========================================================
-    // TOP-LEVEL SCAN (ONLY top level can declare global let/const)
-    // ========================================================
     for (const node of ast.body) {
       if (node.type === "FunctionDeclaration") {
         fns.push(node);
